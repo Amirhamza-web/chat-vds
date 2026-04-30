@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/http';
 import { useAuthStore, type AuthUser } from '../lib/store';
+import ThemeToggle from '../components/ThemeToggle';
 
 export default function RegisterPage() {
   const [email, setEmail] = useState('');
@@ -41,6 +42,9 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-app px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <form
         onSubmit={onSubmit}
         className="bg-surface-card border border-line rounded-xl shadow-card w-full max-w-md p-8 flex flex-col gap-5"

@@ -203,7 +203,7 @@ function CreateChannelModal({ guildId, onClose }: { guildId: string; onClose: ()
 
   return (
     <div
-      className="fixed inset-0 bg-ink-primary/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
@@ -286,7 +286,7 @@ function InviteModal({ code, onClose }: { code: string; onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 bg-ink-primary/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div

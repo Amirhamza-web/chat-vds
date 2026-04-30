@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/http';
 import { useAuthStore } from '../lib/store';
+import ThemeToggle from '../components/ThemeToggle';
 
 interface InviteInfo {
   code: string;
@@ -43,6 +44,9 @@ export default function InvitePage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-surface-app px-4">
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
       <div className="bg-surface-card border border-line rounded-xl shadow-card w-full max-w-md p-8 text-center flex flex-col gap-5">
         {error && (
           <div className="text-danger text-sm bg-danger-soft border border-danger/20 px-3 py-2 rounded-md">

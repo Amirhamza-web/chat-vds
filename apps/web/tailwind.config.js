@@ -17,31 +17,28 @@ export default {
         ],
       },
       colors: {
-        // Linear / Notion-inspired light palette
         surface: {
-          // page + panels
-          app: '#fafafa',
-          card: '#ffffff',
-          subtle: '#f4f4f5',
-          muted: '#ececef',
+          app: 'rgb(var(--surface-app) / <alpha-value>)',
+          card: 'rgb(var(--surface-card) / <alpha-value>)',
+          subtle: 'rgb(var(--surface-subtle) / <alpha-value>)',
+          muted: 'rgb(var(--surface-muted) / <alpha-value>)',
         },
-        line: '#e4e4e7',
+        line: 'rgb(var(--line) / <alpha-value>)',
         ink: {
-          // text scale
-          primary: '#18181b',
-          secondary: '#3f3f46',
-          tertiary: '#71717a',
-          muted: '#a1a1aa',
+          primary: 'rgb(var(--ink-primary) / <alpha-value>)',
+          secondary: 'rgb(var(--ink-secondary) / <alpha-value>)',
+          tertiary: 'rgb(var(--ink-tertiary) / <alpha-value>)',
+          muted: 'rgb(var(--ink-muted) / <alpha-value>)',
         },
         accent: {
-          DEFAULT: '#4f46e5',
-          hover: '#4338ca',
-          soft: '#eef2ff',
+          DEFAULT: 'rgb(var(--accent) / <alpha-value>)',
+          hover: 'rgb(var(--accent-hover) / <alpha-value>)',
+          soft: 'rgb(var(--accent-soft) / <alpha-value>)',
         },
-        positive: '#10b981',
+        positive: 'rgb(var(--positive) / <alpha-value>)',
         danger: {
-          DEFAULT: '#dc2626',
-          soft: '#fef2f2',
+          DEFAULT: 'rgb(var(--danger) / <alpha-value>)',
+          soft: 'rgb(var(--danger-soft) / <alpha-value>)',
         },
       },
       boxShadow: {
