@@ -1,0 +1,15 @@
+node_modules
+**/node_modules
+**/dist
+**/build
+**/.next
+**/.turbo
+**/coverage
+.git
+.github
+.vscode
+.idea
+**/.env
+**/.env.local
+infra/volumes
+apps/api/uploads

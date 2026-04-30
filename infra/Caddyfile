@@ -1,0 +1,29 @@
+# Caddyfile for chat-vds. Replace {$DOMAIN} in env when deploying.
+# When DOMAIN=localhost, Caddy serves over plain HTTP on :80.
+
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	encode gzip zstd
+
+	# WebSocket + REST + uploads
+	handle /api/* {
+		reverse_proxy api:3001
+	}
+	handle /socket.io/* {
+		reverse_proxy api:3001
+	}
+	handle /uploads/* {
+		reverse_proxy api:3001
+	}
+	handle /health {
+		reverse_proxy api:3001
+	}
+
+	# Static SPA
+	handle {
+		reverse_proxy web:80
+	}
+}

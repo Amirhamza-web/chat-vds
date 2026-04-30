@@ -1,0 +1,164 @@
+// Prisma schema for chat-vds.
+// Run `pnpm --filter @chat-vds/api prisma:migrate:dev --name init` after editing.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  username     String    @unique
+  displayName  String
+  passwordHash String
+  avatarUrl    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  members       Member[]
+  messages      Message[]
+  ownedGuilds   Guild[]   @relation("GuildOwner")
+  invites       Invite[]
+  refreshTokens RefreshToken[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Guild {
+  id        String   @id @default(cuid())
+  name      String
+  iconUrl   String?
+  ownerId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner    User      @relation("GuildOwner", fields: [ownerId], references: [id])
+  channels Channel[]
+  members  Member[]
+  roles    Role[]
+  invites  Invite[]
+
+  @@map("guilds")
+}
+
+model Member {
+  id       String   @id @default(cuid())
+  userId   String
+  guildId  String
+  nickname String?
+  joinedAt DateTime @default(now())
+
+  user  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guild Guild   @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  roles Role[]  @relation("MemberRoles")
+
+  @@unique([userId, guildId])
+  @@index([guildId])
+  @@map("members")
+}
+
+model Role {
+  id          String @id @default(cuid())
+  guildId     String
+  name        String
+  color       Int    @default(0)
+  permissions String @default("0") // BigInt as decimal string for portability
+  position    Int    @default(0)
+
+  guild   Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  members Member[] @relation("MemberRoles")
+
+  @@index([guildId])
+  @@map("roles")
+}
+
+enum ChannelType {
+  TEXT
+  VOICE
+  CATEGORY
+  DM
+}
+
+model Channel {
+  id       String      @id @default(cuid())
+  guildId  String?
+  name     String
+  type     ChannelType
+  position Int         @default(0)
+  topic    String?
+  parentId String?
+  createdAt DateTime   @default(now())
+
+  guild    Guild?    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([guildId])
+  @@map("channels")
+}
+
+model Message {
+  id        String    @id @default(cuid())
+  channelId String
+  authorId  String
+  content   String
+  editedAt  DateTime?
+  createdAt DateTime  @default(now())
+
+  channel     Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author      User         @relation(fields: [authorId], references: [id])
+  attachments Attachment[]
+
+  @@index([channelId, createdAt])
+  @@map("messages")
+}
+
+model Attachment {
+  id        String  @id @default(cuid())
+  messageId String?
+  uploaderId String
+  url       String
+  filename  String
+  size      Int
+  mimeType  String
+  createdAt DateTime @default(now())
+
+  message Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("attachments")
+}
+
+model Invite {
+  code      String    @id
+  guildId   String
+  inviterId String
+  expiresAt DateTime?
+  uses      Int       @default(0)
+  maxUses   Int?
+  createdAt DateTime  @default(now())
+
+  guild   Guild @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  inviter User  @relation(fields: [inviterId], references: [id])
+
+  @@index([guildId])
+  @@map("invites")
+}
