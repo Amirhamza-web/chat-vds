@@ -92,6 +92,13 @@ infra/
   deploy/README.md     VDS deployment instructions
 ```
 
+## Continuous integration
+
+A ready-to-use GitHub Actions workflow lives at
+[`infra/ci/ci.yml.example`](./infra/ci/ci.yml.example). Copy it to
+`.github/workflows/ci.yml` from the GitHub web UI (or with a token that has the
+`workflow` scope) — it runs `typecheck` and `build` on every push and PR.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
