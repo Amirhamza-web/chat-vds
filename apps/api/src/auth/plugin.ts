@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import fp from 'fastify-plugin';
 import { verifyAccessToken } from './jwt.js';
 
 declare module 'fastify' {
@@ -11,7 +12,7 @@ declare module 'fastify' {
   }
 }
 
-export async function authPlugin(app: FastifyInstance): Promise<void> {
+export const authPlugin = fp(async function authPlugin(app: FastifyInstance) {
   app.addHook('onRequest', async (req) => {
     const auth = req.headers.authorization;
     if (auth && auth.startsWith('Bearer ')) {
@@ -29,4 +30,4 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
       reply.code(401).send({ error: 'Unauthorized' });
     }
   });
-}
+});
