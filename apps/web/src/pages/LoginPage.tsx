@@ -31,58 +31,70 @@ export default function LoginPage() {
       });
       navigate('/');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Не удалось войти');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-700">
+    <div className="min-h-screen flex items-center justify-center bg-surface-app px-4">
       <form
         onSubmit={onSubmit}
-        className="bg-bg-800 p-8 rounded-md shadow-lg w-full max-w-md flex flex-col gap-4"
+        className="bg-surface-card border border-line rounded-xl shadow-card w-full max-w-md p-8 flex flex-col gap-5"
       >
-        <h1 className="text-2xl font-semibold text-white text-center">Welcome back</h1>
+        <div className="flex flex-col gap-1 text-center">
+          <h1 className="text-2xl font-semibold text-ink-primary">С возвращением</h1>
+          <p className="text-sm text-ink-tertiary">Войдите в свой аккаунт chat-vds</p>
+        </div>
         {error && (
-          <div className="text-red-400 text-sm bg-red-900/30 p-2 rounded">{error}</div>
+          <div className="text-danger text-sm bg-danger-soft border border-danger/20 px-3 py-2 rounded-md">
+            {error}
+          </div>
         )}
-        <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase font-semibold text-text-muted">Email</span>
+        <Field label="Email">
           <input
             type="email"
             required
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="bg-bg-900 text-text-primary px-3 py-2 rounded border border-bg-600 focus:border-accent outline-none"
+            className="bg-surface-card text-ink-primary px-3 py-2 rounded-md border border-line focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition"
           />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs uppercase font-semibold text-text-muted">Password</span>
+        </Field>
+        <Field label="Пароль">
           <input
             type="password"
             required
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="bg-bg-900 text-text-primary px-3 py-2 rounded border border-bg-600 focus:border-accent outline-none"
+            className="bg-surface-card text-ink-primary px-3 py-2 rounded-md border border-line focus:border-accent focus:ring-2 focus:ring-accent/20 outline-none transition"
           />
-        </label>
+        </Field>
         <button
           type="submit"
           disabled={loading}
-          className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-semibold py-2 rounded transition"
+          className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium py-2.5 rounded-md transition"
         >
-          {loading ? 'Signing in…' : 'Log in'}
+          {loading ? 'Вход…' : 'Войти'}
         </button>
-        <div className="text-sm text-text-muted text-center">
-          Need an account?{' '}
-          <Link to="/register" className="text-accent hover:underline">
-            Register
+        <div className="text-sm text-ink-tertiary text-center">
+          Нет аккаунта?{' '}
+          <Link to="/register" className="text-accent hover:text-accent-hover font-medium">
+            Зарегистрироваться
           </Link>
         </div>
       </form>
     </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-ink-secondary">{label}</span>
+      {children}
+    </label>
   );
 }

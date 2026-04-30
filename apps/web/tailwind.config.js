@@ -3,24 +3,50 @@ export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: [
+          'Inter',
+          'ui-sans-serif',
+          'system-ui',
+          '-apple-system',
+          'Segoe UI',
+          'Roboto',
+          'Helvetica Neue',
+          'Arial',
+          'sans-serif',
+        ],
+      },
       colors: {
-        // Discord-inspired neutral palette
-        bg: {
-          900: '#202225',
-          800: '#2f3136',
-          700: '#36393f',
-          600: '#40444b',
-          500: '#4f545c',
+        // Linear / Notion-inspired light palette
+        surface: {
+          // page + panels
+          app: '#fafafa',
+          card: '#ffffff',
+          subtle: '#f4f4f5',
+          muted: '#ececef',
+        },
+        line: '#e4e4e7',
+        ink: {
+          // text scale
+          primary: '#18181b',
+          secondary: '#3f3f46',
+          tertiary: '#71717a',
+          muted: '#a1a1aa',
         },
         accent: {
-          DEFAULT: '#5865f2',
-          hover: '#4752c4',
+          DEFAULT: '#4f46e5',
+          hover: '#4338ca',
+          soft: '#eef2ff',
         },
-        text: {
-          primary: '#dcddde',
-          muted: '#b9bbbe',
-          subtle: '#8e9297',
+        positive: '#10b981',
+        danger: {
+          DEFAULT: '#dc2626',
+          soft: '#fef2f2',
         },
+      },
+      boxShadow: {
+        card: '0 1px 2px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.06)',
+        pop: '0 8px 24px rgba(15, 23, 42, 0.12)',
       },
     },
   },

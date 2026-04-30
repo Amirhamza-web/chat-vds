@@ -35,30 +35,40 @@ export default function InvitePage() {
       const guild = await api<{ id: string }>(`/invites/${code}/accept`, { method: 'POST' });
       navigate(`/channels/${guild.id}`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to accept');
+      setError(e instanceof Error ? e.message : 'Не удалось принять приглашение');
     } finally {
       setAccepting(false);
     }
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-bg-700">
-      <div className="bg-bg-800 p-8 rounded-md w-full max-w-md text-center flex flex-col gap-4">
-        {error && <div className="text-red-400">{error}</div>}
+    <div className="min-h-screen flex items-center justify-center bg-surface-app px-4">
+      <div className="bg-surface-card border border-line rounded-xl shadow-card w-full max-w-md p-8 text-center flex flex-col gap-5">
+        {error && (
+          <div className="text-danger text-sm bg-danger-soft border border-danger/20 px-3 py-2 rounded-md">
+            {error}
+          </div>
+        )}
         {invite && (
           <>
-            <h1 className="text-2xl font-semibold">You've been invited!</h1>
-            <p className="text-text-muted">
-              Join <span className="text-white font-semibold">{invite.guild.name}</span>
-            </p>
+            <div className="flex flex-col gap-1">
+              <h1 className="text-2xl font-semibold text-ink-primary">Вас пригласили</h1>
+              <p className="text-ink-tertiary text-sm">
+                Присоединиться к серверу{' '}
+                <span className="text-ink-primary font-semibold">{invite.guild.name}</span>
+              </p>
+            </div>
             <button
               onClick={accept}
               disabled={accepting}
-              className="bg-accent hover:bg-accent-hover text-white font-semibold py-2 rounded"
+              className="bg-accent hover:bg-accent-hover disabled:opacity-50 text-white font-medium py-2.5 rounded-md transition"
             >
-              {accepting ? 'Joining…' : 'Accept Invite'}
+              {accepting ? 'Подключение…' : 'Принять приглашение'}
             </button>
           </>
+        )}
+        {!invite && !error && (
+          <div className="text-ink-tertiary text-sm">Загрузка…</div>
         )}
       </div>
     </div>

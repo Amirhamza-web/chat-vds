@@ -33,12 +33,12 @@ export default function AppShell() {
 
   if (isLoading) {
     return (
-      <div className="h-screen flex items-center justify-center text-text-muted">Loading…</div>
+      <div className="h-screen flex items-center justify-center text-ink-tertiary">Загрузка…</div>
     );
   }
 
   return (
-    <div className="h-screen flex bg-bg-900 text-text-primary">
+    <div className="h-screen flex bg-surface-app text-ink-primary">
       <GuildSidebar guilds={guilds} onCreated={(g) => navigate(`/channels/${g.id}`)} />
       <Routes>
         <Route
@@ -54,9 +54,9 @@ export default function AppShell() {
 
 function EmptyState() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center text-text-muted gap-3">
-      <p>You're not in any servers yet.</p>
-      <p className="text-sm">Click the + button on the left to create one.</p>
+    <div className="flex-1 flex flex-col items-center justify-center text-ink-tertiary gap-2 px-6 text-center">
+      <p className="text-base text-ink-secondary">Вы пока ни на одном сервере</p>
+      <p className="text-sm">Нажмите кнопку «+» слева, чтобы создать новый.</p>
     </div>
   );
 }
@@ -68,11 +68,11 @@ interface GuildViewProps {
 function GuildView({ guilds }: GuildViewProps) {
   return (
     <>
-      <div className="w-60 bg-bg-800 flex flex-col">
+      <div className="w-60 bg-surface-card border-r border-line flex flex-col">
         <ChannelSidebar guilds={guilds} />
         <UserPanel />
       </div>
-      <main className="flex-1 flex flex-col bg-bg-700 min-w-0">
+      <main className="flex-1 flex flex-col bg-surface-card min-w-0">
         <Routes>
           <Route index element={<ChannelLanding />} />
           <Route path=":channelId" element={<ChannelRouter />} />
@@ -84,8 +84,8 @@ function GuildView({ guilds }: GuildViewProps) {
 
 function ChannelLanding() {
   return (
-    <div className="flex-1 flex items-center justify-center text-text-muted">
-      Pick a channel from the left.
+    <div className="flex-1 flex items-center justify-center text-ink-tertiary text-sm">
+      Выберите канал слева
     </div>
   );
 }
@@ -96,8 +96,8 @@ function ChannelRouter() {
   const channel = guild?.channels.find((c) => c.id === channelId);
   if (!channel) {
     return (
-      <div className="flex-1 flex items-center justify-center text-text-muted">
-        Channel not found
+      <div className="flex-1 flex items-center justify-center text-ink-tertiary text-sm">
+        Канал не найден
       </div>
     );
   }

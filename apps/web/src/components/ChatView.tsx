@@ -134,15 +134,15 @@ export default function ChatView({ channelId, channelName }: Props) {
 
   return (
     <>
-      <header className="px-4 py-3 border-b border-bg-900 shadow-sm flex items-center gap-2">
-        <span className="text-text-subtle">#</span>
-        <h2 className="font-semibold text-white">{channelName}</h2>
+      <header className="px-5 py-3 border-b border-line bg-surface-card flex items-center gap-2 shrink-0">
+        <span className="text-ink-muted">#</span>
+        <h2 className="font-semibold text-ink-primary">{channelName}</h2>
       </header>
 
-      <div ref={scrollerRef} className="flex-1 overflow-y-auto py-4">
+      <div ref={scrollerRef} className="flex-1 overflow-y-auto py-4 bg-surface-card">
         {messages.length === 0 && (
-          <div className="text-center text-text-muted py-10">
-            This is the beginning of #{channelName}. Say hi!
+          <div className="text-center text-ink-tertiary py-10 text-sm">
+            Это начало канала #{channelName}. Напишите первое сообщение!
           </div>
         )}
         {messages.map((m, i) => {
@@ -154,29 +154,29 @@ export default function ChatView({ channelId, channelName }: Props) {
         })}
       </div>
 
-      <div className="px-4 pb-1 h-5 text-xs text-text-muted">
-        {typingNames.length > 0 && `Someone is typing…`}
+      <div className="px-5 pb-1 h-5 text-xs text-ink-muted">
+        {typingNames.length > 0 && 'Кто-то печатает…'}
       </div>
 
-      <div className="px-4 pb-4">
+      <div className="px-5 pb-4">
         {pendingAttachment && (
-          <div className="bg-bg-800 px-3 py-2 mb-2 rounded flex items-center gap-3 text-sm">
+          <div className="bg-surface-subtle border border-line px-3 py-2 mb-2 rounded-md flex items-center gap-3 text-sm">
             <span className="text-accent">📎</span>
-            <span className="flex-1 truncate">{pendingAttachment.filename}</span>
+            <span className="flex-1 truncate text-ink-secondary">{pendingAttachment.filename}</span>
             <button
               onClick={() => setPendingAttachment(null)}
-              className="text-text-subtle hover:text-red-400"
+              className="text-ink-muted hover:text-danger"
             >
               ×
             </button>
           </div>
         )}
-        <div className="flex items-end bg-bg-600 rounded-md">
+        <div className="flex items-end bg-surface-card border border-line rounded-lg focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20 transition">
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            title="Attach file"
-            className="px-3 py-3 text-text-muted hover:text-white"
+            title="Прикрепить файл"
+            className="px-3 py-3 text-ink-muted hover:text-accent disabled:opacity-50"
           >
             {uploading ? '…' : '📎'}
           </button>
@@ -193,14 +193,15 @@ export default function ChatView({ channelId, channelName }: Props) {
                 void send();
               }
             }}
-            placeholder={`Message #${channelName}`}
+            placeholder={`Написать в #${channelName}`}
             rows={1}
-            className="flex-1 bg-transparent resize-none outline-none px-2 py-3 max-h-32"
+            className="flex-1 bg-transparent text-ink-primary placeholder:text-ink-muted resize-none outline-none px-2 py-3 max-h-32"
           />
           <button
             onClick={send}
             disabled={sending || (!draft.trim() && !pendingAttachment)}
-            className="px-4 py-3 text-accent hover:text-white disabled:opacity-30"
+            title="Отправить"
+            className="px-4 py-3 text-accent hover:text-accent-hover disabled:opacity-30"
           >
             ➤
           </button>
