@@ -45,8 +45,7 @@ export default function AppShell() {
           path="/"
           element={firstGuild ? <Navigate to={`/channels/${firstGuild.id}`} replace /> : <EmptyState />}
         />
-        <Route path="/channels/:guildId" element={<GuildView guilds={guilds} />} />
-        <Route path="/channels/:guildId/:channelId" element={<GuildView guilds={guilds} />} />
+        <Route path="/channels/:guildId/*" element={<GuildView guilds={guilds} />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>
