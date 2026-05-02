@@ -15,13 +15,19 @@ TypeScript everywhere.
 - Invite links with optional expiry / use limits
 - Discord-inspired UI with Tailwind CSS
 
-### Phase 2 (next) — voice & video
+### Phase 2 — voice
 
 - mediasoup SFU + coturn for NAT traversal (already in `docker-compose.yml`)
 - Mute / deafen / speaking indicators
-- Camera and screenshare
 
-### Phase 3+
+### Phase 3 — video & screenshare
+
+- Camera toggle (VP8/VP9 via mediasoup)
+- Screen sharing via `getDisplayMedia`
+- Adaptive layout: video grid when no screenshare; focused screen + sidebar when someone shares
+- `appData.source` tag (`mic` | `camera` | `screen`) on every producer for proper routing
+
+### Phase 4+
 
 - Roles with per-channel permission overwrites
 - Reactions, mentions, pinned messages
@@ -32,7 +38,7 @@ TypeScript everywhere.
 
 - **Backend:** Node.js 20, TypeScript, Fastify, Socket.IO, Prisma, PostgreSQL, Redis
 - **Frontend:** React 18, TypeScript, Vite, TailwindCSS, Zustand, TanStack Query
-- **Realtime / Voice:** Socket.IO (text), mediasoup + coturn (Phase 2)
+- **Realtime / Media:** Socket.IO (text), mediasoup SFU + coturn (voice, video, screenshare)
 - **Storage:** local disk or MinIO (S3-compatible)
 - **Reverse proxy:** Caddy (automatic Let's Encrypt)
 - **Container:** Docker Compose, single `docker compose up -d`
