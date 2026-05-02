@@ -7,6 +7,7 @@ import type {
   RtpParameters,
   DtlsParameters,
 } from 'mediasoup/types';
+import type { ProducerSource } from '@chat-vds/shared';
 import { loadEnv } from './config.js';
 import { mediaCodecs, nextWorker } from './workers.js';
 import { log } from './log.js';
@@ -20,6 +21,8 @@ export interface PeerInfo {
   avatarUrl: string | null;
   micMuted: boolean;
   deafened: boolean;
+  cameraOn: boolean;
+  screenSharing: boolean;
 }
 
 interface PeerSession {
@@ -83,15 +86,24 @@ export class VoiceRoom {
   }
 
   /** All other peers' producers — used when a new peer joins so it can subscribe. */
-  otherProducers(userId: string): { peerId: string; producerId: string; kind: 'audio' | 'video' }[] {
-    const out: { peerId: string; producerId: string; kind: 'audio' | 'video' }[] = [];
+  otherProducers(userId: string): { peerId: string; producerId: string; kind: 'audio' | 'video'; source: ProducerSource }[] {
+    const out: { peerId: string; producerId: string; kind: 'audio' | 'video'; source: ProducerSource }[] = [];
     for (const [otherId, peer] of this.peers) {
       if (otherId === userId) continue;
       for (const p of peer.producers.values()) {
-        out.push({ peerId: otherId, producerId: p.id, kind: p.kind as 'audio' | 'video' });
+        const source = (p.appData.source as ProducerSource | undefined) ?? 'mic';
+        out.push({ peerId: otherId, producerId: p.id, kind: p.kind as 'audio' | 'video', source });
       }
     }
     return out;
+  }
+
+  findProducerSource(producerId: string): ProducerSource {
+    for (const peer of this.peers.values()) {
+      const p = peer.producers.get(producerId);
+      if (p) return (p.appData.source as ProducerSource | undefined) ?? 'mic';
+    }
+    return 'mic';
   }
 
   async createWebRtcTransport(): Promise<WebRtcTransport> {

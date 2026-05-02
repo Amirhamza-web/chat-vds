@@ -45,9 +45,13 @@ export const VoiceEvents = {
   NewProducer: 'voice:new-producer',
   ProducerClosed: 'voice:producer-closed',
   PeerStateUpdate: 'voice:peer-state',
+  ActiveSpeaker: 'voice:active-speaker',
 } as const;
 
 export type VoiceEventName = (typeof VoiceEvents)[keyof typeof VoiceEvents];
+
+/** Source tag attached to a producer via appData. */
+export type ProducerSource = 'mic' | 'camera' | 'screen';
 
 export interface VoicePeerDto {
   userId: string;
@@ -56,6 +60,8 @@ export interface VoicePeerDto {
   avatarUrl: string | null;
   micMuted: boolean;
   deafened: boolean;
+  cameraOn: boolean;
+  screenSharing: boolean;
 }
 
 export interface VoiceParticipantsPayload {

@@ -4,7 +4,7 @@ import type {
   RtpCapabilities,
   RtpParameters,
 } from 'mediasoup/types';
-import { VoiceEvents, type VoiceParticipantsPayload } from '@chat-vds/shared';
+import { VoiceEvents, type VoiceParticipantsPayload, type ProducerSource } from '@chat-vds/shared';
 import { verifyAccessToken } from './auth.js';
 import { prisma } from './prisma.js';
 import { deleteRoom, getOrCreateRoom, getRoom } from './rooms-registry.js';
@@ -106,7 +106,7 @@ export function attachSignaling(io: SocketIOServer): void {
     socket.on(
       VoiceEvents.Produce,
       async (
-        payload: { kind: 'audio' | 'video'; rtpParameters: RtpParameters },
+        payload: { kind: 'audio' | 'video'; rtpParameters: RtpParameters; source?: ProducerSource },
         cb?: Ack,
       ) => {
         try {
@@ -115,19 +115,36 @@ export function attachSignaling(io: SocketIOServer): void {
           if (!room || !peer || !peer.sendTransport) {
             return cb?.({ error: 'no send transport' });
           }
+          const source: ProducerSource = payload.source ?? (payload.kind === 'audio' ? 'mic' : 'camera');
           const producer = await peer.sendTransport.produce({
             kind: payload.kind,
             rtpParameters: payload.rtpParameters,
+            appData: { source },
           });
           peer.producers.set(producer.id, producer);
           producer.on('transportclose', () => producer.close());
+
+          if (source === 'camera') peer.info.cameraOn = true;
+          else if (source === 'screen') peer.info.screenSharing = true;
+
           socket
             .to(roomId(room.channelId))
             .emit(VoiceEvents.NewProducer, {
               peerId: socket.data.userId,
               producerId: producer.id,
               kind: producer.kind,
+              source,
             });
+          if (source === 'camera' || source === 'screen') {
+            socket.to(roomId(room.channelId)).emit(VoiceEvents.PeerStateUpdate, {
+              userId: peer.info.userId,
+              micMuted: peer.info.micMuted,
+              deafened: peer.info.deafened,
+              cameraOn: peer.info.cameraOn,
+              screenSharing: peer.info.screenSharing,
+            });
+            await broadcastParticipantsSnapshot(room);
+          }
           cb?.({ id: producer.id });
         } catch (err) {
           log.error({ err }, 'voice:produce failed');
@@ -154,10 +171,12 @@ export function attachSignaling(io: SocketIOServer): void {
           })) {
             return cb?.({ error: 'cannot consume' });
           }
+          const producerSource = room.findProducerSource(payload.producerId);
           const consumer = await peer.recvTransport.consume({
             producerId: payload.producerId,
             rtpCapabilities: payload.rtpCapabilities,
             paused: true,
+            appData: { source: producerSource },
           });
           peer.consumers.set(consumer.id, consumer);
           consumer.on('transportclose', () => consumer.close());
@@ -170,6 +189,7 @@ export function attachSignaling(io: SocketIOServer): void {
             producerId: payload.producerId,
             kind: consumer.kind,
             rtpParameters: consumer.rtpParameters,
+            source: producerSource,
           });
         } catch (err) {
           log.error({ err }, 'voice:consume failed');
@@ -195,17 +215,53 @@ export function attachSignaling(io: SocketIOServer): void {
     );
 
     socket.on(
+      VoiceEvents.CloseProducer,
+      async (payload: { producerId: string }, cb?: Ack) => {
+        try {
+          const room = currentRoom(socket);
+          const peer = room?.getPeer(socket.data.userId);
+          if (!room || !peer) return cb?.({ error: 'peer not found' });
+          const producer = peer.producers.get(payload.producerId);
+          if (!producer) return cb?.({ error: 'producer not found' });
+          const source = (producer.appData.source as ProducerSource | undefined) ?? 'mic';
+          producer.close();
+          peer.producers.delete(payload.producerId);
+          if (source === 'camera') peer.info.cameraOn = false;
+          else if (source === 'screen') peer.info.screenSharing = false;
+          if (source === 'camera' || source === 'screen') {
+            socket.to(roomId(room.channelId)).emit(VoiceEvents.PeerStateUpdate, {
+              userId: peer.info.userId,
+              micMuted: peer.info.micMuted,
+              deafened: peer.info.deafened,
+              cameraOn: peer.info.cameraOn,
+              screenSharing: peer.info.screenSharing,
+            });
+            await broadcastParticipantsSnapshot(room);
+          }
+          cb?.({ ok: true });
+        } catch (err) {
+          log.error({ err }, 'voice:close-producer failed');
+          cb?.({ error: 'internal error' });
+        }
+      },
+    );
+
+    socket.on(
       VoiceEvents.StateUpdate,
-      async (payload: { micMuted?: boolean; deafened?: boolean }) => {
+      async (payload: { micMuted?: boolean; deafened?: boolean; cameraOn?: boolean; screenSharing?: boolean }) => {
         const room = currentRoom(socket);
         const peer = room?.getPeer(socket.data.userId);
         if (!peer || !room) return;
         if (typeof payload?.micMuted === 'boolean') peer.info.micMuted = payload.micMuted;
         if (typeof payload?.deafened === 'boolean') peer.info.deafened = payload.deafened;
+        if (typeof payload?.cameraOn === 'boolean') peer.info.cameraOn = payload.cameraOn;
+        if (typeof payload?.screenSharing === 'boolean') peer.info.screenSharing = payload.screenSharing;
         socket.to(roomId(room.channelId)).emit(VoiceEvents.PeerStateUpdate, {
           userId: peer.info.userId,
           micMuted: peer.info.micMuted,
           deafened: peer.info.deafened,
+          cameraOn: peer.info.cameraOn,
+          screenSharing: peer.info.screenSharing,
         });
         await broadcastParticipantsSnapshot(room);
       },
@@ -255,6 +311,8 @@ async function handleJoin(
     avatarUrl: user.avatarUrl,
     micMuted: false,
     deafened: false,
+    cameraOn: false,
+    screenSharing: false,
   };
   room.addPeer(socket.id, info);
   socket.data.channelId = channelId;

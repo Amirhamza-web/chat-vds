@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import clsx from 'clsx';
 import type { VoicePeerDto } from '@chat-vds/shared';
 import { VoiceClient } from '../lib/voice';
-import { useVoiceStore } from '../lib/voice-store';
+import { useVoiceStore, videoTrackKey } from '../lib/voice-store';
 import { useAuthStore } from '../lib/store';
 
 interface Props {
@@ -15,9 +15,12 @@ export default function VoiceView({ channelId, channelName }: Props) {
   const peers = useVoiceStore((s) => s.peers);
   const micMuted = useVoiceStore((s) => s.micMuted);
   const deafened = useVoiceStore((s) => s.deafened);
+  const cameraOn = useVoiceStore((s) => s.cameraOn);
+  const screenSharing = useVoiceStore((s) => s.screenSharing);
   const connecting = useVoiceStore((s) => s.connecting);
   const error = useVoiceStore((s) => s.error);
   const activeChannelId = useVoiceStore((s) => s.channelId);
+  const videoTracks = useVoiceStore((s) => s.videoTracks);
   const setConnecting = useVoiceStore((s) => s.setConnecting);
   const setError = useVoiceStore((s) => s.setError);
   const setActiveChannel = useVoiceStore((s) => s.setActiveChannel);
@@ -28,6 +31,10 @@ export default function VoiceView({ channelId, channelName }: Props) {
   const setPeerState = useVoiceStore((s) => s.setPeerState);
   const setMicMuted = useVoiceStore((s) => s.setMicMuted);
   const setDeafened = useVoiceStore((s) => s.setDeafened);
+  const setCameraOn = useVoiceStore((s) => s.setCameraOn);
+  const setScreenSharing = useVoiceStore((s) => s.setScreenSharing);
+  const setVideoTrack = useVoiceStore((s) => s.setVideoTrack);
+  const removeVideoTrack = useVoiceStore((s) => s.removeVideoTrack);
 
   const clientRef = useRef<VoiceClient | null>(null);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -49,15 +56,14 @@ export default function VoiceView({ channelId, channelName }: Props) {
           audioRefs.current.delete(uid);
         }
       },
-      onPeerStateUpdate: ({ userId, micMuted, deafened }) =>
-        setPeerState(userId, micMuted, deafened),
+      onPeerStateUpdate: ({ userId, micMuted, deafened, cameraOn, screenSharing }) =>
+        setPeerState(userId, { micMuted, deafened, cameraOn, screenSharing }),
       onRemoteAudio: (peerId, track) => {
         let el = audioRefs.current.get(peerId);
         if (!el) {
           el = document.createElement('audio');
           el.autoplay = true;
           el.dataset.peerId = peerId;
-          // Hidden — UI shows peer card; the audio element just plays sound.
           el.style.display = 'none';
           document.body.appendChild(el);
           audioRefs.current.set(peerId, el);
@@ -68,9 +74,13 @@ export default function VoiceView({ channelId, channelName }: Props) {
       },
       onRemoteAudioRemoved: (peerId) => {
         const el = audioRefs.current.get(peerId);
-        if (el) {
-          el.srcObject = null;
-        }
+        if (el) el.srcObject = null;
+      },
+      onRemoteVideo: (peerId, track, source) => {
+        setVideoTrack(videoTrackKey(peerId, source), track);
+      },
+      onRemoteVideoRemoved: (peerId, source) => {
+        removeVideoTrack(videoTrackKey(peerId, source));
       },
       onError: (msg) => setError(msg),
     });
@@ -78,7 +88,6 @@ export default function VoiceView({ channelId, channelName }: Props) {
     try {
       await client.connect();
       const initialPeers = await client.join(channelId);
-      // include self
       const self: VoicePeerDto | null = me
         ? {
             userId: me.id,
@@ -87,13 +96,16 @@ export default function VoiceView({ channelId, channelName }: Props) {
             avatarUrl: me.avatarUrl,
             micMuted: false,
             deafened: false,
+            cameraOn: false,
+            screenSharing: false,
           }
         : null;
       setPeers(self ? [self, ...initialPeers] : initialPeers);
       setActiveChannel(channelId, channelName);
       setMicMuted(false);
       setDeafened(false);
-      // Local mic VU
+      setCameraOn(false);
+      setScreenSharing(false);
       const localTrack = client.getLocalAudioTrack();
       if (localTrack && me) {
         const stream = new MediaStream([localTrack]);
@@ -134,13 +146,9 @@ export default function VoiceView({ channelId, channelName }: Props) {
     resetChannel();
   };
 
-  // Disconnect on unmount only if user explicitly left — we keep voice active
-  // when user navigates to other channels. Only fully cleanup on logout (not
-  // handled here, AppShell can hook into auth changes).
   useEffect(() => {
     return () => {
-      // No-op: we want voice to persist across channel navigation. Disconnect
-      // is explicit via leave button.
+      // No-op: we want voice to persist across channel navigation.
     };
   }, []);
 
@@ -160,7 +168,62 @@ export default function VoiceView({ channelId, channelName }: Props) {
     }
   };
 
+  const toggleCamera = useCallback(async () => {
+    const client = clientRef.current;
+    if (!client) return;
+    try {
+      if (cameraOn) {
+        await client.stopCamera();
+        setCameraOn(false);
+        if (me) removeVideoTrack(videoTrackKey(me.id, 'camera'));
+      } else {
+        const track = await client.startCamera();
+        setCameraOn(true);
+        if (me) setVideoTrack(videoTrackKey(me.id, 'camera'), track);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось включить камеру');
+    }
+  }, [cameraOn, me, setCameraOn, setError, setVideoTrack, removeVideoTrack]);
+
+  const toggleScreen = useCallback(async () => {
+    const client = clientRef.current;
+    if (!client) return;
+    try {
+      if (screenSharing) {
+        await client.stopScreen();
+        setScreenSharing(false);
+        if (me) removeVideoTrack(videoTrackKey(me.id, 'screen'));
+      } else {
+        const track = await client.startScreen();
+        setScreenSharing(true);
+        if (me) setVideoTrack(videoTrackKey(me.id, 'screen'), track);
+        track.addEventListener('ended', () => {
+          setScreenSharing(false);
+          if (me) removeVideoTrack(videoTrackKey(me.id, 'screen'));
+        });
+      }
+    } catch (err) {
+      if (err instanceof Error && err.name !== 'NotAllowedError') {
+        setError(err.message);
+      }
+    }
+  }, [screenSharing, me, setScreenSharing, setError, setVideoTrack, removeVideoTrack]);
+
   const peerList = useMemo(() => Array.from(peers.values()), [peers]);
+
+  // Determine if anyone is screen sharing (for layout)
+  const screenShareEntries = useMemo(() => {
+    const entries: { peerId: string; peer: VoicePeerDto; track: MediaStreamTrack }[] = [];
+    for (const p of peerList) {
+      const key = videoTrackKey(p.userId, 'screen');
+      const track = videoTracks.get(key);
+      if (track) entries.push({ peerId: p.userId, peer: p, track });
+    }
+    return entries;
+  }, [peerList, videoTracks]);
+
+  const hasScreenShare = screenShareEntries.length > 0;
 
   return (
     <div className="flex-1 flex flex-col bg-surface-card">
@@ -175,7 +238,7 @@ export default function VoiceView({ channelId, channelName }: Props) {
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4">
         {!inThisChannel ? (
           <EmptyState
             channelName={channelName}
@@ -183,17 +246,21 @@ export default function VoiceView({ channelId, channelName }: Props) {
             connecting={connecting}
             error={error}
           />
+        ) : hasScreenShare ? (
+          <ScreenShareLayout
+            screenShareEntries={screenShareEntries}
+            peerList={peerList}
+            me={me}
+            speaking={speaking}
+            videoTracks={videoTracks}
+          />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {peerList.map((p) => (
-              <PeerTile
-                key={p.userId}
-                peer={p}
-                isSelf={p.userId === me?.id}
-                speaking={speaking.has(p.userId) && !p.micMuted}
-              />
-            ))}
-          </div>
+          <VideoGrid
+            peerList={peerList}
+            me={me}
+            speaking={speaking}
+            videoTracks={videoTracks}
+          />
         )}
       </div>
 
@@ -211,6 +278,18 @@ export default function VoiceView({ channelId, channelName }: Props) {
             onClick={toggleDeafen}
             icon={deafened ? '🔇' : '🔊'}
           />
+          <ToggleBtn
+            active={cameraOn}
+            label={cameraOn ? 'Выключить камеру' : 'Включить камеру'}
+            onClick={toggleCamera}
+            icon={cameraOn ? '📹' : '📹/'}
+          />
+          <ToggleBtn
+            active={screenSharing}
+            label={screenSharing ? 'Остановить демонстрацию' : 'Демонстрация экрана'}
+            onClick={toggleScreen}
+            icon={screenSharing ? '🖥️' : '🖥️/'}
+          />
           <button
             onClick={disconnect}
             className="ml-2 h-9 px-3 rounded-md bg-danger text-white text-sm font-medium hover:opacity-90 transition"
@@ -222,6 +301,182 @@ export default function VoiceView({ channelId, channelName }: Props) {
     </div>
   );
 }
+
+/* ───── Screen-share focused layout ───── */
+
+function ScreenShareLayout({
+  screenShareEntries,
+  peerList,
+  me,
+  speaking,
+  videoTracks,
+}: {
+  screenShareEntries: { peerId: string; peer: VoicePeerDto; track: MediaStreamTrack }[];
+  peerList: VoicePeerDto[];
+  me: { id: string } | null;
+  speaking: Set<string>;
+  videoTracks: Map<string, MediaStreamTrack>;
+}) {
+  const mainEntry = screenShareEntries[0]!;
+  return (
+    <div className="flex gap-3 h-full">
+      {/* Main screen share */}
+      <div className="flex-1 min-w-0 bg-black rounded-lg overflow-hidden relative">
+        <VideoElement track={mainEntry.track} muted={false} className="w-full h-full object-contain" />
+        <div className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded">
+          {mainEntry.peer.displayName} — экран
+        </div>
+      </div>
+      {/* Sidebar with participants */}
+      <div className="w-48 flex flex-col gap-2 overflow-y-auto shrink-0">
+        {peerList.map((p) => (
+          <PeerTile
+            key={p.userId}
+            peer={p}
+            isSelf={p.userId === me?.id}
+            speaking={speaking.has(p.userId) && !p.micMuted}
+            cameraTrack={videoTracks.get(videoTrackKey(p.userId, 'camera'))}
+            compact
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ───── Video grid (no screen share) ───── */
+
+function VideoGrid({
+  peerList,
+  me,
+  speaking,
+  videoTracks,
+}: {
+  peerList: VoicePeerDto[];
+  me: { id: string } | null;
+  speaking: Set<string>;
+  videoTracks: Map<string, MediaStreamTrack>;
+}) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+      {peerList.map((p) => (
+        <PeerTile
+          key={p.userId}
+          peer={p}
+          isSelf={p.userId === me?.id}
+          speaking={speaking.has(p.userId) && !p.micMuted}
+          cameraTrack={videoTracks.get(videoTrackKey(p.userId, 'camera'))}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ───── Peer tile ───── */
+
+function PeerTile({
+  peer,
+  isSelf,
+  speaking,
+  cameraTrack,
+  compact,
+}: {
+  peer: VoicePeerDto;
+  isSelf: boolean;
+  speaking: boolean;
+  cameraTrack?: MediaStreamTrack;
+  compact?: boolean;
+}) {
+  const initials = peer.displayName.slice(0, 2).toUpperCase();
+  const hasVideo = !!cameraTrack;
+
+  return (
+    <div
+      className={clsx(
+        'rounded-lg border flex flex-col items-center gap-2 transition overflow-hidden',
+        compact ? 'p-2' : 'p-4',
+        speaking
+          ? 'border-positive shadow-pop bg-accent-soft'
+          : 'border-line bg-surface-subtle',
+      )}
+    >
+      {hasVideo ? (
+        <div className={clsx('relative w-full rounded-md overflow-hidden bg-black', compact ? 'aspect-video' : 'aspect-video')}>
+          <VideoElement
+            track={cameraTrack}
+            muted={isSelf}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      ) : (
+        <div
+          className={clsx(
+            'rounded-full flex items-center justify-center text-xl font-semibold',
+            'bg-accent text-white ring-4 transition',
+            speaking ? 'ring-positive' : 'ring-transparent',
+            compact ? 'w-10 h-10 text-sm' : 'w-16 h-16',
+          )}
+        >
+          {peer.avatarUrl ? (
+            <img
+              src={peer.avatarUrl}
+              alt={peer.displayName}
+              className="w-full h-full rounded-full object-cover"
+            />
+          ) : (
+            initials
+          )}
+        </div>
+      )}
+      <div className={clsx('font-medium text-ink-primary truncate max-w-full', compact ? 'text-xs' : 'text-sm')}>
+        {peer.displayName}
+        {isSelf && <span className="text-ink-tertiary"> (вы)</span>}
+      </div>
+      <div className="flex items-center gap-2 text-xs text-ink-tertiary">
+        {peer.micMuted && <span title="Микрофон выключен">🎙️/</span>}
+        {peer.deafened && <span title="Звук выключен">🔇</span>}
+        {peer.cameraOn && <span title="Камера включена">📹</span>}
+        {peer.screenSharing && <span title="Демонстрация экрана">🖥️</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ───── Video element ───── */
+
+function VideoElement({
+  track,
+  muted,
+  className,
+}: {
+  track: MediaStreamTrack;
+  muted: boolean;
+  className?: string;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const stream = new MediaStream([track]);
+    el.srcObject = stream;
+    return () => {
+      el.srcObject = null;
+    };
+  }, [track]);
+
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted={muted}
+      className={className}
+    />
+  );
+}
+
+/* ───── UI helpers ───── */
 
 interface EmptyStateProps {
   channelName: string;
@@ -247,54 +502,6 @@ function EmptyState({ channelName, onConnect, connecting, error }: EmptyStatePro
         {connecting ? 'Подключение…' : 'Подключиться'}
       </button>
       {error && <p className="text-danger text-sm">{error}</p>}
-    </div>
-  );
-}
-
-function PeerTile({
-  peer,
-  isSelf,
-  speaking,
-}: {
-  peer: VoicePeerDto;
-  isSelf: boolean;
-  speaking: boolean;
-}) {
-  const initials = peer.displayName.slice(0, 2).toUpperCase();
-  return (
-    <div
-      className={clsx(
-        'rounded-lg border p-4 flex flex-col items-center gap-2 transition',
-        speaking
-          ? 'border-positive shadow-pop bg-accent-soft'
-          : 'border-line bg-surface-subtle',
-      )}
-    >
-      <div
-        className={clsx(
-          'w-16 h-16 rounded-full flex items-center justify-center text-xl font-semibold',
-          'bg-accent text-white ring-4 transition',
-          speaking ? 'ring-positive' : 'ring-transparent',
-        )}
-      >
-        {peer.avatarUrl ? (
-          <img
-            src={peer.avatarUrl}
-            alt={peer.displayName}
-            className="w-full h-full rounded-full object-cover"
-          />
-        ) : (
-          initials
-        )}
-      </div>
-      <div className="text-sm font-medium text-ink-primary truncate max-w-full">
-        {peer.displayName}
-        {isSelf && <span className="text-ink-tertiary"> (вы)</span>}
-      </div>
-      <div className="flex items-center gap-2 text-xs text-ink-tertiary">
-        {peer.micMuted && <span title="Микрофон выключен">🎙️/</span>}
-        {peer.deafened && <span title="Звук выключен">🔇</span>}
-      </div>
     </div>
   );
 }
@@ -328,8 +535,7 @@ function ToggleBtn({
 }
 
 /**
- * Lightweight VU detector via Web Audio API. Updates the speaking set when
- * the stream's RMS energy exceeds a threshold for a brief window.
+ * Lightweight VU detector via Web Audio API.
  */
 function attachVoiceActivity(
   stream: MediaStream,
@@ -353,15 +559,15 @@ function attachVoiceActivity(
         sum += v * v;
       }
       const rms = Math.sqrt(sum / data.length);
-      const speaking = rms > 0.04;
+      const isSpeaking = rms > 0.04;
       setSpeaking((prev) => {
         const has = prev.has(peerId);
-        if (speaking && !has) {
+        if (isSpeaking && !has) {
           const next = new Set(prev);
           next.add(peerId);
           return next;
         }
-        if (!speaking && has) {
+        if (!isSpeaking && has) {
           const next = new Set(prev);
           next.delete(peerId);
           return next;
@@ -371,7 +577,6 @@ function attachVoiceActivity(
       raf = requestAnimationFrame(loop);
     };
     loop();
-    // Cleanup on track end
     const track = stream.getAudioTracks()[0];
     if (track) {
       track.addEventListener('ended', () => {

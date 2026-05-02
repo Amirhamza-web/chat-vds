@@ -6,7 +6,7 @@ import type {
   RtpCapabilities,
 } from 'mediasoup-client/types';
 import { io, Socket } from 'socket.io-client';
-import { VoiceEvents, type VoicePeerDto } from '@chat-vds/shared';
+import { VoiceEvents, type VoicePeerDto, type ProducerSource } from '@chat-vds/shared';
 import { useAuthStore } from './store';
 
 const SFU_URL = import.meta.env.VITE_SFU_URL ?? 'http://localhost:3002';
@@ -14,7 +14,7 @@ const SFU_URL = import.meta.env.VITE_SFU_URL ?? 'http://localhost:3002';
 interface JoinResponse {
   rtpCapabilities: RtpCapabilities;
   peers: VoicePeerDto[];
-  existingProducers: { peerId: string; producerId: string; kind: 'audio' | 'video' }[];
+  existingProducers: { peerId: string; producerId: string; kind: 'audio' | 'video'; source: ProducerSource }[];
   error?: string;
 }
 
@@ -30,22 +30,25 @@ interface NewProducerEvent {
   peerId: string;
   producerId: string;
   kind: 'audio' | 'video';
+  source: ProducerSource;
 }
 
 interface PeerStateUpdate {
   userId: string;
   micMuted: boolean;
   deafened: boolean;
+  cameraOn: boolean;
+  screenSharing: boolean;
 }
 
 export interface VoiceClientHandlers {
   onPeerJoined: (peer: VoicePeerDto) => void;
   onPeerLeft: (userId: string) => void;
   onPeerStateUpdate: (state: PeerStateUpdate) => void;
-  /** Called when a remote producer is available; receiver wires audio element. */
   onRemoteAudio: (peerId: string, track: MediaStreamTrack) => void;
-  /** Called when a remote producer is closed (peer muted/disconnected). */
   onRemoteAudioRemoved: (peerId: string) => void;
+  onRemoteVideo: (peerId: string, track: MediaStreamTrack, source: 'camera' | 'screen') => void;
+  onRemoteVideoRemoved: (peerId: string, source: 'camera' | 'screen') => void;
   onError: (msg: string) => void;
 }
 
@@ -55,8 +58,16 @@ export class VoiceClient {
   private sendTransport: Transport | null = null;
   private recvTransport: Transport | null = null;
   private micProducer: Producer | null = null;
-  private consumers = new Map<string, Consumer>(); // consumerId -> Consumer
+  private cameraProducer: Producer | null = null;
+  private screenProducer: Producer | null = null;
+  private consumers = new Map<string, Consumer>();
   private localStream: MediaStream | null = null;
+  private cameraStream: MediaStream | null = null;
+  private screenStream: MediaStream | null = null;
+
+  /** Map producerId -> source, filled on produce calls so the transport
+   *  'produce' callback can forward the correct source to the SFU. */
+  private pendingProduceSource: ProducerSource = 'mic';
 
   constructor(private handlers: VoiceClientHandlers) {}
 
@@ -97,7 +108,7 @@ export class VoiceClient {
     );
     s.on(VoiceEvents.NewProducer, async (e: NewProducerEvent) => {
       try {
-        await this.consumeRemote(e.peerId, e.producerId);
+        await this.consumeRemote(e.peerId, e.producerId, e.source);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[voice] consumeRemote', err);
@@ -106,9 +117,15 @@ export class VoiceClient {
     s.on(VoiceEvents.ProducerClosed, ({ consumerId }: { consumerId: string }) => {
       const c = this.consumers.get(consumerId);
       if (c) {
+        const source = c.appData.source as ProducerSource;
+        const peerId = c.appData.peerId as string;
         c.close();
         this.consumers.delete(consumerId);
-        this.handlers.onRemoteAudioRemoved(c.appData.peerId as string);
+        if (source === 'camera' || source === 'screen') {
+          this.handlers.onRemoteVideoRemoved(peerId, source);
+        } else {
+          this.handlers.onRemoteAudioRemoved(peerId);
+        }
       }
     });
   }
@@ -125,10 +142,9 @@ export class VoiceClient {
     await this.createRecvTransport();
     await this.startMicProducer();
 
-    // Subscribe to existing producers (peers already in room).
     for (const ep of resp.existingProducers) {
       try {
-        await this.consumeRemote(ep.peerId, ep.producerId);
+        await this.consumeRemote(ep.peerId, ep.producerId, ep.source);
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[voice] initial consume', err);
@@ -155,6 +171,7 @@ export class VoiceClient {
       this.emit<{ id: string; error?: string }>(VoiceEvents.Produce, {
         kind,
         rtpParameters,
+        source: this.pendingProduceSource,
       })
         .then((r) => (r.error ? errback(new Error(r.error)) : callback({ id: r.id })))
         .catch(errback);
@@ -190,35 +207,91 @@ export class VoiceClient {
     });
     const track = this.localStream.getAudioTracks()[0];
     if (!track) throw new Error('no microphone track');
+    this.pendingProduceSource = 'mic';
     this.micProducer = await this.sendTransport!.produce({
       track,
       codecOptions: { opusStereo: false, opusDtx: true },
     });
   }
 
-  private async consumeRemote(peerId: string, producerId: string): Promise<void> {
+  async startCamera(): Promise<MediaStreamTrack> {
+    if (this.cameraProducer) throw new Error('camera already active');
+    this.cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 24 } },
+    });
+    const track = this.cameraStream.getVideoTracks()[0];
+    if (!track) throw new Error('no camera track');
+    this.pendingProduceSource = 'camera';
+    this.cameraProducer = await this.sendTransport!.produce({ track });
+    return track;
+  }
+
+  async stopCamera(): Promise<void> {
+    if (!this.cameraProducer) return;
+    const producerId = this.cameraProducer.id;
+    this.cameraProducer.close();
+    this.cameraProducer = null;
+    if (this.cameraStream) {
+      for (const t of this.cameraStream.getTracks()) t.stop();
+      this.cameraStream = null;
+    }
+    await this.emit(VoiceEvents.CloseProducer, { producerId });
+  }
+
+  async startScreen(): Promise<MediaStreamTrack> {
+    if (this.screenProducer) throw new Error('screen share already active');
+    this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 15 } },
+    });
+    const track = this.screenStream.getVideoTracks()[0];
+    if (!track) throw new Error('no screen track');
+    track.addEventListener('ended', () => {
+      void this.stopScreen();
+    });
+    this.pendingProduceSource = 'screen';
+    this.screenProducer = await this.sendTransport!.produce({ track });
+    return track;
+  }
+
+  async stopScreen(): Promise<void> {
+    if (!this.screenProducer) return;
+    const producerId = this.screenProducer.id;
+    this.screenProducer.close();
+    this.screenProducer = null;
+    if (this.screenStream) {
+      for (const t of this.screenStream.getTracks()) t.stop();
+      this.screenStream = null;
+    }
+    await this.emit(VoiceEvents.CloseProducer, { producerId });
+  }
+
+  private async consumeRemote(peerId: string, producerId: string, source: ProducerSource = 'mic'): Promise<void> {
     if (!this.recvTransport || !this.device) return;
     const resp = await this.emit<{
       id: string;
       kind: 'audio' | 'video';
       rtpParameters: never;
+      source?: ProducerSource;
       error?: string;
     }>(VoiceEvents.Consume, {
       producerId,
       rtpCapabilities: this.device.rtpCapabilities,
     });
     if (resp.error) throw new Error(resp.error);
+    const resolvedSource = resp.source ?? source;
     const consumer = await this.recvTransport.consume({
       id: resp.id,
       producerId,
       kind: resp.kind,
       rtpParameters: resp.rtpParameters,
-      appData: { peerId },
+      appData: { peerId, source: resolvedSource },
     });
     this.consumers.set(consumer.id, consumer);
     await this.emit(VoiceEvents.ResumeConsumer, { consumerId: consumer.id });
     if (consumer.kind === 'audio') {
       this.handlers.onRemoteAudio(peerId, consumer.track);
+    } else if (consumer.kind === 'video') {
+      this.handlers.onRemoteVideo(peerId, consumer.track, resolvedSource as 'camera' | 'screen');
     }
   }
 
@@ -241,6 +314,14 @@ export class VoiceClient {
     void this.emit(VoiceEvents.StateUpdate, { deafened });
   }
 
+  get isCameraActive(): boolean {
+    return this.cameraProducer !== null && !this.cameraProducer.closed;
+  }
+
+  get isScreenActive(): boolean {
+    return this.screenProducer !== null && !this.screenProducer.closed;
+  }
+
   async leave(): Promise<void> {
     try {
       await this.emit(VoiceEvents.Leave, {});
@@ -257,6 +338,10 @@ export class VoiceClient {
     this.consumers.clear();
     try { this.micProducer?.close(); } catch { /* ignore */ }
     this.micProducer = null;
+    try { this.cameraProducer?.close(); } catch { /* ignore */ }
+    this.cameraProducer = null;
+    try { this.screenProducer?.close(); } catch { /* ignore */ }
+    this.screenProducer = null;
     try { this.sendTransport?.close(); } catch { /* ignore */ }
     try { this.recvTransport?.close(); } catch { /* ignore */ }
     this.sendTransport = null;
@@ -265,12 +350,19 @@ export class VoiceClient {
       for (const t of this.localStream.getTracks()) t.stop();
       this.localStream = null;
     }
+    if (this.cameraStream) {
+      for (const t of this.cameraStream.getTracks()) t.stop();
+      this.cameraStream = null;
+    }
+    if (this.screenStream) {
+      for (const t of this.screenStream.getTracks()) t.stop();
+      this.screenStream = null;
+    }
     this.device = null;
     this.socket?.disconnect();
     this.socket = null;
   }
 
-  /** Promise-wrapped Socket.IO emit-with-ack. */
   private emit<T = unknown>(event: string, payload: unknown): Promise<T> {
     return new Promise((resolve, reject) => {
       if (!this.socket) return reject(new Error('not connected'));
@@ -281,5 +373,9 @@ export class VoiceClient {
 
   getLocalAudioTrack(): MediaStreamTrack | null {
     return this.localStream?.getAudioTracks()[0] ?? null;
+  }
+
+  getLocalCameraTrack(): MediaStreamTrack | null {
+    return this.cameraStream?.getVideoTracks()[0] ?? null;
   }
 }

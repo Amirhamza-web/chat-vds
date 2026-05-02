@@ -13,6 +13,19 @@ export const mediaCodecs: RtpCodecCapability[] = [
     clockRate: 48000,
     channels: 2,
   },
+  {
+    kind: 'video',
+    mimeType: 'video/VP8',
+    preferredPayloadType: 101,
+    clockRate: 90000,
+  },
+  {
+    kind: 'video',
+    mimeType: 'video/VP9',
+    preferredPayloadType: 102,
+    clockRate: 90000,
+    parameters: { 'profile-id': 2 },
+  },
 ];
 
 let workers: Worker[] = [];
