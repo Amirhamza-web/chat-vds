@@ -5,7 +5,7 @@ import { fetchGuilds } from '../features/guilds/api';
 import GuildSidebar from '../components/GuildSidebar';
 import ChannelSidebar from '../components/ChannelSidebar';
 import ChatView from '../components/ChatView';
-import VoicePlaceholder from '../components/VoicePlaceholder';
+import VoiceView from '../components/VoiceView';
 import UserPanel from '../components/UserPanel';
 import { getSocket, disconnectSocket } from '../lib/socket';
 import { useAuthStore } from '../lib/store';
@@ -105,7 +105,7 @@ function ChannelRouter() {
     return <ChatView channelId={channel.id} channelName={channel.name} />;
   }
   if (channel.type === 'VOICE') {
-    return <VoicePlaceholder channelName={channel.name} />;
+    return <VoiceView channelId={channel.id} channelName={channel.name} />;
   }
   return <div className="flex-1" />;
 }

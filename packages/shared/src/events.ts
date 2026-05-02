@@ -19,8 +19,50 @@ export const SocketEvents = {
   ChannelCreate: 'channel:create',
   ChannelDelete: 'channel:delete',
   TypingUpdate: 'typing:update',
+  VoiceParticipants: 'voice:participants',
   Error: 'app:error',
 } as const;
+
+/**
+ * Voice / SFU signaling events. These flow on a separate Socket.IO connection
+ * to apps/sfu (not the main API gateway). Names are namespaced with `voice:`.
+ */
+export const VoiceEvents = {
+  // client → SFU
+  Join: 'voice:join',
+  Leave: 'voice:leave',
+  CreateTransport: 'voice:create-transport',
+  ConnectTransport: 'voice:connect-transport',
+  Produce: 'voice:produce',
+  Consume: 'voice:consume',
+  ResumeConsumer: 'voice:resume-consumer',
+  CloseProducer: 'voice:close-producer',
+  StateUpdate: 'voice:state',
+
+  // SFU → client
+  PeerJoined: 'voice:peer-joined',
+  PeerLeft: 'voice:peer-left',
+  NewProducer: 'voice:new-producer',
+  ProducerClosed: 'voice:producer-closed',
+  PeerStateUpdate: 'voice:peer-state',
+} as const;
+
+export type VoiceEventName = (typeof VoiceEvents)[keyof typeof VoiceEvents];
+
+export interface VoicePeerDto {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  micMuted: boolean;
+  deafened: boolean;
+}
+
+export interface VoiceParticipantsPayload {
+  channelId: string;
+  guildId: string | null;
+  participants: VoicePeerDto[];
+}
 
 export type SocketEventName = (typeof SocketEvents)[keyof typeof SocketEvents];
 
