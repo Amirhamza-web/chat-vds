@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server as SocketIOServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import { SocketEvents } from '@chat-vds/shared';
+import { SocketEvents, type VoiceParticipantsPayload } from '@chat-vds/shared';
 import { loadEnv } from '../config/env.js';
 import { redisPub, redisSub } from '../lib/redis.js';
 import { verifyAccessToken } from '../auth/jwt.js';
@@ -22,6 +22,20 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
     cors: { origin: env.CORS_ORIGIN.split(','), credentials: true },
   });
   io.adapter(createAdapter(redisPub, redisSub));
+
+  // Re-broadcast voice participants snapshots from the SFU process.
+  const voiceSub = redisPub.duplicate();
+  void voiceSub.subscribe('voice:participants');
+  voiceSub.on('message', (_channel, raw) => {
+    try {
+      const payload = JSON.parse(raw) as VoiceParticipantsPayload;
+      if (payload.guildId) {
+        io?.to(`guild:${payload.guildId}`).emit(SocketEvents.VoiceParticipants, payload);
+      }
+    } catch {
+      /* ignore malformed payloads */
+    }
+  });
 
   io.use((socket, next) => {
     const token =

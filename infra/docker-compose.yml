@@ -81,6 +81,7 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         VITE_API_URL: ${API_PUBLIC_URL:-http://localhost:3001}
+        VITE_SFU_URL: ${SFU_PUBLIC_URL:-${API_PUBLIC_URL:-http://localhost:3001}}
     restart: unless-stopped
     depends_on:
       - api
@@ -103,13 +104,57 @@ services:
       - api
       - web
 
-  # ─────────── Phase 2 services (used once SFU is implemented) ───────────
+  # ─────────── Phase 2: voice/video ───────────
+  # SFU uses the bridge network so it can reach `postgres` / `redis` by service
+  # name. The mediasoup RTP port range (default 40000-40100/udp+tcp) is
+  # exposed on the host so WebRTC traffic flows directly from clients to the
+  # SFU. MEDIASOUP_ANNOUNCED_IP MUST be set to the VDS public IPv4.
+  sfu:
+    build:
+      context: ..
+      dockerfile: apps/sfu/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      HOST: 0.0.0.0
+      DATABASE_URL: postgresql://${POSTGRES_USER:-chatvds}:${POSTGRES_PASSWORD:-chatvds}@postgres:5432/${POSTGRES_DB:-chatvds}?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (min 32 chars)}
+      CORS_ORIGIN: ${PUBLIC_URL:-http://localhost}
+      MEDIASOUP_ANNOUNCED_IP: ${MEDIASOUP_ANNOUNCED_IP}
+      MEDIASOUP_RTC_MIN_PORT: ${MEDIASOUP_RTC_MIN_PORT:-40000}
+      MEDIASOUP_RTC_MAX_PORT: ${MEDIASOUP_RTC_MAX_PORT:-40100}
+    ports:
+      - '${MEDIASOUP_RTC_MIN_PORT:-40000}-${MEDIASOUP_RTC_MAX_PORT:-40100}:${MEDIASOUP_RTC_MIN_PORT:-40000}-${MEDIASOUP_RTC_MAX_PORT:-40100}/udp'
+      - '${MEDIASOUP_RTC_MIN_PORT:-40000}-${MEDIASOUP_RTC_MAX_PORT:-40100}:${MEDIASOUP_RTC_MIN_PORT:-40000}-${MEDIASOUP_RTC_MAX_PORT:-40100}/tcp'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles:
+      - voice
+
   coturn:
     image: coturn/coturn:latest
     restart: unless-stopped
     network_mode: host
-    volumes:
-      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command:
+      - -n
+      - --log-file=stdout
+      - --no-stdout-log
+      - --listening-port=3478
+      - --fingerprint
+      - --lt-cred-mech
+      - --user=${COTURN_USER:-chatvds}:${COTURN_PASSWORD:-CHANGE_ME}
+      - --realm=${COTURN_REALM:-chat-vds.local}
+      - --min-port=49152
+      - --max-port=65535
+      - --no-loopback-peers
+      - --no-multicast-peers
+      - --no-tlsv1
+      - --no-tlsv1_1
     profiles:
       - voice
 

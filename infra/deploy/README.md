@@ -16,10 +16,15 @@ sudo ufw allow 80/tcp     # HTTP (Let's Encrypt challenge + redirect)
 sudo ufw allow 443/tcp    # HTTPS
 sudo ufw allow 443/udp    # HTTP/3
 # Phase 2 (voice) only:
-sudo ufw allow 3478/udp
-sudo ufw allow 49152:65535/udp
+sudo ufw allow 40000:40100/udp     # mediasoup RTP/RTCP (clients ↔ SFU)
+sudo ufw allow 40000:40100/tcp     # mediasoup ICE-TCP fallback
+sudo ufw allow 3478/udp            # coturn STUN/TURN (optional fallback)
+sudo ufw allow 49152:65535/udp     # coturn relay range (optional fallback)
 sudo ufw enable
 ```
+
+If you change `MEDIASOUP_RTC_MIN_PORT`/`MEDIASOUP_RTC_MAX_PORT` in `.env`,
+adjust the `40000:40100` ranges above to match.
 
 ## 3. Install Docker
 
@@ -95,10 +100,53 @@ Same pattern for `chat-vds_minio_data` (if using MinIO) and `chat-vds_api_upload
 
 ## 9. Phase 2 (voice/video)
 
-When the SFU lands, run:
+The voice stack (mediasoup SFU + coturn) ships behind the `voice` Compose
+profile so it doesn't run unless you opt in.
+
+1. Open the Phase 2 firewall ports listed in **§2**.
+2. Set the voice block in `infra/.env`:
+
+   ```env
+   # MUST be the public IPv4 of your VDS — clients dial UDP directly to it.
+   MEDIASOUP_ANNOUNCED_IP=203.0.113.10
+   MEDIASOUP_RTC_MIN_PORT=40000
+   MEDIASOUP_RTC_MAX_PORT=40100
+
+   # Optional TURN fallback (used by clients on hard NATs).
+   COTURN_USER=chatvds
+   COTURN_PASSWORD=<a-strong-password>
+   COTURN_REALM=chat.example.com
+
+   # The web bundle uses this URL to open the SFU socket. Same domain as
+   # the API works because Caddy proxies /sfu/* → sfu:3002.
+   SFU_PUBLIC_URL=https://chat.example.com
+   ```
+
+3. Bring up the voice services:
+
+   ```bash
+   docker compose --profile voice up -d --build
+   docker compose logs -f sfu
+   ```
+
+   You should see `sfu listening` with the configured RTC port range.
+
+4. In the web app, create a voice channel (or open `general-voice` that's
+   auto-created in every server) and click **Подключиться**. Browser will
+   prompt for microphone access. Two browsers connected to the same channel
+   should hear each other.
+
+### Why two ports / two protocols?
+
+WebRTC media uses UDP (low latency); we expose 40000-40100/udp directly so
+mediasoup can reach the public IPv4 without Docker NAT. ICE-TCP on the same
+range is a fallback for clients on UDP-blocked networks. The SFU's HTTP/WS
+signaling stays on `:3002`, fronted by Caddy at `/sfu/*` over TLS.
+
+### Bring it down
 
 ```bash
-docker compose --profile voice up -d
+docker compose --profile voice down
 ```
 
-Edit `infra/coturn/turnserver.conf` (set `realm` and a real `user=`) before that.
+Text chat keeps running on the default profile.

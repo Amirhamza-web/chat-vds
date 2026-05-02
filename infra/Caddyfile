@@ -22,6 +22,11 @@
 		reverse_proxy api:3001
 	}
 
+	# Voice signaling (mediasoup SFU). Media (WebRTC/UDP) bypasses Caddy.
+	handle /sfu/* {
+		reverse_proxy sfu:3002
+	}
+
 	# Static SPA
 	handle {
 		reverse_proxy web:80
