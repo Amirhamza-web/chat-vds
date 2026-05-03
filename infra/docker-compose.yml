@@ -147,7 +147,7 @@ services:
       - --listening-port=3478
       - --fingerprint
       - --lt-cred-mech
-      - --user=${COTURN_USER:-chatvds}:${COTURN_PASSWORD:-CHANGE_ME}
+      - --user=${COTURN_USER:-chatvds}:${COTURN_PASSWORD:-chatvds}
       - --realm=${COTURN_REALM:-chat-vds.local}
       - --min-port=49152
       - --max-port=65535
