@@ -2,7 +2,7 @@ import type { LoginInput, RegisterInput } from '@chat-vds/shared';
 import { Conflict, Unauthorized } from '../lib/errors.js';
 import { prisma } from '../db/prisma.js';
 import { hashPassword, verifyPassword } from './password.js';
-import { buildTokenPair, rotateRefreshToken, revokeRefreshToken, type TokenPair } from './jwt.js';
+import { buildTokenPair, signAccessToken, rotateRefreshToken, revokeRefreshToken, type TokenPair } from './jwt.js';
 
 export async function register(input: RegisterInput): Promise<{ user: PublicUser; tokens: TokenPair }> {
   const existing = await prisma.user.findFirst({
@@ -49,8 +49,13 @@ export async function refresh(refreshToken: string): Promise<TokenPair> {
     select: { id: true, username: true },
   });
   if (!user) throw Unauthorized('User not found');
-  const access = await buildTokenPair(user);
-  return { ...access, refreshToken: rotated.newToken, refreshExpiresAt: rotated.exp };
+  const access = signAccessToken({ sub: user.id, username: user.username });
+  return {
+    accessToken: access.token,
+    accessExpiresAt: access.exp,
+    refreshToken: rotated.newToken,
+    refreshExpiresAt: rotated.exp,
+  };
 }
 
 export async function logout(refreshToken: string): Promise<void> {

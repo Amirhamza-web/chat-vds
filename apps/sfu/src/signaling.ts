@@ -341,9 +341,11 @@ async function handleLeave(socket: SfuSocket): Promise<void> {
     socket.to(roomId(channelId)).emit(VoiceEvents.PeerLeft, { userId: peer.info.userId });
   }
   if (room.isEmpty()) {
+    await broadcastParticipantsSnapshot(room);
     deleteRoom(channelId);
+  } else {
+    await broadcastParticipantsSnapshot(room);
   }
-  await broadcastParticipantsSnapshot(room);
 }
 
 function currentRoom(socket: SfuSocket): VoiceRoom | undefined {

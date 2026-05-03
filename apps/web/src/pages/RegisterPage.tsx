@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../lib/http';
 import { useAuthStore, type AuthUser } from '../lib/store';
 import ThemeToggle from '../components/ThemeToggle';
@@ -13,6 +13,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const setSession = useAuthStore((s) => s.setSession);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -32,7 +33,7 @@ export default function RegisterPage() {
         accessToken: res.tokens.accessToken,
         refreshToken: res.tokens.refreshToken,
       });
-      navigate('/');
+      navigate(searchParams.get('redirect') || '/');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось зарегистрироваться');
     } finally {

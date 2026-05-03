@@ -366,8 +366,11 @@ export class VoiceClient {
   private emit<T = unknown>(event: string, payload: unknown): Promise<T> {
     return new Promise((resolve, reject) => {
       if (!this.socket) return reject(new Error('not connected'));
-      this.socket.emit(event, payload, (resp: T) => resolve(resp));
-      setTimeout(() => reject(new Error(`emit ${event} timed out`)), 15_000);
+      const timer = setTimeout(() => reject(new Error(`emit ${event} timed out`)), 15_000);
+      this.socket.emit(event, payload, (resp: T) => {
+        clearTimeout(timer);
+        resolve(resp);
+      });
     });
   }
 
