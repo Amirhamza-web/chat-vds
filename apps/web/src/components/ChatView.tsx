@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchMessages, sendMessage, uploadAttachment } from '../features/messages/api';
 import type { MessageDto } from '../features/messages/types';
@@ -126,9 +126,13 @@ export default function ChatView({ channelId, channelName }: Props) {
     }
   }
 
-  function emitTyping() {
+  const lastTypingRef = useRef(0);
+  const emitTyping = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTypingRef.current < 2000) return;
+    lastTypingRef.current = now;
     getSocket().emit(SocketEvents.TypingStart, channelId);
-  }
+  }, [channelId]);
 
   const typingNames = Object.keys(typingUsers);
 

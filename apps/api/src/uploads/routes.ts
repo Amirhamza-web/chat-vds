@@ -8,9 +8,14 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
     if (!req.userId) throw Unauthorized();
     const file = await req.file();
     if (!file) throw BadRequest('No file provided');
-    const storage = getStorage();
-    const stored = await storage.put(file.file, file.filename, file.mimetype);
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.file) {
+      chunks.push(chunk as Buffer);
+    }
     if (file.file.truncated) throw BadRequest('File too large');
+    const { Readable } = await import('node:stream');
+    const storage = getStorage();
+    const stored = await storage.put(Readable.from(Buffer.concat(chunks)), file.filename, file.mimetype);
     const attachment = await prisma.attachment.create({
       data: {
         uploaderId: req.userId,

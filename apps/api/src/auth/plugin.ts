@@ -27,7 +27,7 @@ export const authPlugin = fp(async function authPlugin(app: FastifyInstance) {
 
   app.decorate('requireAuth', async (req: FastifyRequest, reply: FastifyReply) => {
     if (!req.userId) {
-      reply.code(401).send({ error: 'Unauthorized' });
+      return reply.code(401).send({ error: 'Unauthorized' });
     }
   });
 });

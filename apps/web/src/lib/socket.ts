@@ -7,10 +7,11 @@ let socket: Socket | null = null;
 export function getSocket(): Socket {
   if (socket && socket.connected) return socket;
   if (socket) return socket;
-  const token = useAuthStore.getState().accessToken;
   socket = io(apiBaseUrl, {
     transports: ['websocket'],
-    auth: { token },
+    auth: (cb) => {
+      cb({ token: useAuthStore.getState().accessToken });
+    },
     autoConnect: true,
   });
   return socket;
