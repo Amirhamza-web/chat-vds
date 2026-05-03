@@ -6,6 +6,18 @@ export interface AttachmentDto {
   mimeType: string;
 }
 
+export interface ReactionSummaryDto {
+  emoji: string;
+  count: number;
+  userIds: string[];
+}
+
+export interface MentionDto {
+  type: 'USER' | 'ROLE';
+  userId: string | null;
+  roleId: string | null;
+}
+
 export interface MessageDto {
   id: string;
   channelId: string;
@@ -19,5 +31,11 @@ export interface MessageDto {
   content: string;
   createdAt: string;
   editedAt: string | null;
+  pinned: boolean;
+  pinnedAt: string | null;
+  pinnedById: string | null;
+  mentionsEveryone: boolean;
   attachments: AttachmentDto[];
+  reactions: ReactionSummaryDto[];
+  mentions: MentionDto[];
 }

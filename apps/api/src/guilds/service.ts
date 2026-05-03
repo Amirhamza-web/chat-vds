@@ -15,6 +15,7 @@ export async function createGuild(ownerId: string, input: CreateGuildInput) {
         name: '@everyone',
         position: 0,
         permissions: DEFAULT_EVERYONE_PERMS.toString(),
+        isEveryone: true,
       },
     });
     await tx.channel.create({

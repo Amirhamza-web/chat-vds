@@ -28,6 +28,14 @@ export default function GuildSidebar({ guilds, onCreated }: Props) {
   return (
     <>
       <aside className="w-[68px] bg-surface-app border-r border-line flex flex-col items-center py-3 gap-2 overflow-y-auto">
+        <button
+          title="Личные сообщения"
+          onClick={() => navigate('/dms')}
+          className="w-11 h-11 rounded-xl bg-surface-card text-ink-secondary border border-line hover:border-accent hover:text-accent transition flex items-center justify-center text-lg"
+        >
+          ✉
+        </button>
+        <div className="w-8 border-t border-line" />
         {guilds.map((g) => {
           const active = guildId === g.id;
           return (

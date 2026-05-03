@@ -14,9 +14,10 @@ import { useAuthStore } from '../lib/store';
 
 interface Props {
   guilds: GuildWithChannels[];
+  onOpenRoles?: () => void;
 }
 
-export default function ChannelSidebar({ guilds }: Props) {
+export default function ChannelSidebar({ guilds, onOpenRoles }: Props) {
   const { guildId, channelId } = useParams<{ guildId: string; channelId: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -99,7 +100,7 @@ export default function ChannelSidebar({ guilds }: Props) {
           ))}
       </nav>
 
-      <div className="border-t border-line p-2 flex gap-2 text-xs">
+      <div className="border-t border-line p-2 flex flex-wrap gap-2 text-xs">
         <button
           onClick={() => inviteMut.mutate()}
           className="flex-1 bg-surface-subtle hover:bg-surface-muted text-ink-secondary px-2 py-1.5 rounded-md transition"
@@ -107,6 +108,15 @@ export default function ChannelSidebar({ guilds }: Props) {
         >
           {inviteMut.isPending ? '…' : 'Пригласить'}
         </button>
+        {onOpenRoles && (
+          <button
+            onClick={onOpenRoles}
+            className="flex-1 bg-surface-subtle hover:bg-surface-muted text-ink-secondary px-2 py-1.5 rounded-md transition"
+            title="Управление ролями"
+          >
+            Роли
+          </button>
+        )}
         {isOwner ? (
           <button
             onClick={() => {

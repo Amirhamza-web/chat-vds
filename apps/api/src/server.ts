@@ -14,6 +14,10 @@ import { channelRoutes } from './channels/routes.js';
 import { messageRoutes } from './messages/routes.js';
 import { inviteRoutes } from './invites/routes.js';
 import { uploadRoutes } from './uploads/routes.js';
+import { roleRoutes } from './roles/routes.js';
+import { reactionRoutes } from './reactions/routes.js';
+import { dmRoutes } from './dms/routes.js';
+import { pushRoutes } from './push/routes.js';
 import { HttpError } from './lib/errors.js';
 
 export async function buildServer(): Promise<FastifyInstance> {
@@ -68,6 +72,10 @@ export async function buildServer(): Promise<FastifyInstance> {
   await app.register(messageRoutes, { prefix: '/api/v1' });
   await app.register(inviteRoutes, { prefix: '/api/v1' });
   await app.register(uploadRoutes, { prefix: '/api/v1' });
+  await app.register(roleRoutes, { prefix: '/api/v1' });
+  await app.register(reactionRoutes, { prefix: '/api/v1' });
+  await app.register(dmRoutes, { prefix: '/api/v1' });
+  await app.register(pushRoutes, { prefix: '/api/v1' });
 
   return app;
 }
