@@ -58,8 +58,8 @@ docker compose -f infra/docker-compose.yml up -d postgres redis minio
 cp apps/api/.env.example apps/api/.env
 # (the defaults already point at the docker services above)
 
-# 4. Run database migrations
-pnpm --filter @chat-vds/api exec prisma migrate dev --name init
+# 4. Apply database migrations
+pnpm --filter @chat-vds/api exec prisma migrate deploy
 
 # 5. Start API + web in dev mode
 pnpm dev

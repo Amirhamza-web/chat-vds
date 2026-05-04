@@ -7,6 +7,13 @@ import { SocketEvents } from '@chat-vds/shared';
 import { useAuthStore } from '../lib/store';
 import MessageItem from './MessageItem';
 
+function formatTypingNames(names: string[]): string {
+  if (names.length === 0) return '';
+  if (names.length === 1) return names[0]!;
+  if (names.length === 2) return `${names[0]!} и ${names[1]!}`;
+  return `${names[0]!}, ${names[1]!} и ещё ${names.length - 2}`;
+}
+
 interface Props {
   channelId: string;
   channelName: string;
@@ -24,7 +31,7 @@ export default function ChatView({ channelId, channelName }: Props) {
     url: string;
     filename: string;
   } | null>(null);
-  const [typingUsers, setTypingUsers] = useState<Record<string, number>>({});
+  const [typingUsers, setTypingUsers] = useState<Record<string, { name: string; at: number }>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: messages = [] } = useQuery({
@@ -56,10 +63,21 @@ export default function ChatView({ channelId, channelName }: Props) {
         (cur ?? []).filter((m) => m.id !== id),
       );
     };
-    const onTyping = ({ channelId: chId, userId }: { channelId: string; userId: string }) => {
+    const onTyping = ({
+      channelId: chId,
+      userId,
+      displayName,
+      username,
+    }: {
+      channelId: string;
+      userId: string;
+      username?: string;
+      displayName?: string;
+    }) => {
       if (chId !== channelId) return;
       if (userId === me?.id) return;
-      setTypingUsers((cur) => ({ ...cur, [userId]: Date.now() }));
+      const name = displayName ?? username ?? 'Кто-то';
+      setTypingUsers((cur) => ({ ...cur, [userId]: { name, at: Date.now() } }));
     };
 
     socket.on(SocketEvents.MessageNew, onNew);
@@ -88,8 +106,8 @@ export default function ChatView({ channelId, channelName }: Props) {
     const t = setInterval(() => {
       setTypingUsers((cur) => {
         const now = Date.now();
-        const out: Record<string, number> = {};
-        for (const [k, v] of Object.entries(cur)) if (now - v < 4000) out[k] = v;
+        const out: Record<string, { name: string; at: number }> = {};
+        for (const [k, v] of Object.entries(cur)) if (now - v.at < 4000) out[k] = v;
         return out;
       });
     }, 1000);
@@ -134,7 +152,7 @@ export default function ChatView({ channelId, channelName }: Props) {
     getSocket().emit(SocketEvents.TypingStart, channelId);
   }, [channelId]);
 
-  const typingNames = Object.keys(typingUsers);
+  const typingNames = Object.values(typingUsers).map((t) => t.name);
 
   return (
     <>
@@ -159,7 +177,7 @@ export default function ChatView({ channelId, channelName }: Props) {
       </div>
 
       <div className="px-5 pb-1 h-5 text-xs text-ink-muted">
-        {typingNames.length > 0 && 'Кто-то печатает…'}
+        {typingNames.length > 0 && `${formatTypingNames(typingNames)} печатает…`}
       </div>
 
       <div className="px-5 pb-4">

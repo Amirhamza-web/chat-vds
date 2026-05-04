@@ -13,6 +13,7 @@ ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_SFU_URL=$VITE_SFU_URL
 COPY packages/shared packages/shared
 COPY apps/web apps/web
+RUN pnpm --filter @chat-vds/shared build
 RUN pnpm --filter @chat-vds/web build
 
 FROM nginx:alpine AS runtime

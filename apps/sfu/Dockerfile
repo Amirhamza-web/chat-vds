@@ -24,7 +24,7 @@ FROM deps AS builder
 COPY packages/shared packages/shared
 COPY apps/sfu apps/sfu
 RUN pnpm --filter @chat-vds/api prisma:generate
-RUN pnpm --filter @chat-vds/shared build || true
+RUN pnpm --filter @chat-vds/shared build
 RUN pnpm --filter @chat-vds/sfu build
 
 # ──────── runtime ────────
