@@ -1,7 +1,13 @@
 import type { Server as HttpServer } from 'node:http';
 import { Server as SocketIOServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import { SocketEvents, type VoiceParticipantsPayload } from '@chat-vds/shared';
+import {
+  SocketEvents,
+  type MentionNotificationPayload,
+  type PinUpdatePayload,
+  type ReactionEventPayload,
+  type VoiceParticipantsPayload,
+} from '@chat-vds/shared';
 import { loadEnv } from '../config/env.js';
 import { redisPub, redisSub } from '../lib/redis.js';
 import { verifyAccessToken } from '../auth/jwt.js';
@@ -56,13 +62,20 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
     const wasEmpty = await addSocket(userId, socket.id);
     if (wasEmpty) await broadcastPresenceForUser(userId);
 
-    // Auto-join personal room and rooms for all guilds the user belongs to
+    // Auto-join personal room and rooms for all guilds the user belongs to.
     socket.join(`user:${userId}`);
     const memberships = await prisma.member.findMany({
       where: { userId },
       select: { guildId: true },
     });
     for (const m of memberships) socket.join(`guild:${m.guildId}`);
+
+    // Also auto-join DM rooms.
+    const dmChannels = await prisma.dMRecipient.findMany({
+      where: { userId },
+      select: { channelId: true },
+    });
+    for (const d of dmChannels) socket.join(`channel:${d.channelId}`);
 
     const heartbeat = setInterval(() => {
       void refreshPresence(userId);
@@ -76,6 +89,11 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
           where: { userId_guildId: { userId, guildId: channel.guildId } },
         });
         if (!m) return;
+      } else if (channel.type === 'DM') {
+        const r = await prisma.dMRecipient.findUnique({
+          where: { channelId_userId: { channelId, userId } },
+        });
+        if (!r) return;
       }
       socket.join(`channel:${channelId}`);
     });
@@ -104,7 +122,6 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
 async function broadcastPresenceForUser(userId: string) {
   if (!io) return;
   const status = await getStatus(userId);
-  // Notify rooms in every guild the user belongs to
   const memberships = await prisma.member.findMany({
     where: { userId },
     select: { guildId: true },
@@ -128,6 +145,9 @@ export function broadcastMessageDelete(message: { id: string; channelId: string 
     channelId: message.channelId,
   });
 }
+export function broadcastPinUpdate(payload: PinUpdatePayload) {
+  io?.to(`channel:${payload.channelId}`).emit(SocketEvents.MessagePinUpdate, payload);
+}
 export function broadcastChannelCreate(channel: { guildId: string | null }) {
   if (!channel.guildId) return;
   io?.to(`guild:${channel.guildId}`).emit(SocketEvents.ChannelCreate, channel);
@@ -139,6 +159,41 @@ export function broadcastChannelDelete(channel: { id: string; guildId: string | 
     guildId: channel.guildId,
   });
 }
+export function broadcastChannelUpdate(channelId: string) {
+  // Emit to the channel room itself; clients listening can refresh overwrites.
+  io?.to(`channel:${channelId}`).emit(SocketEvents.ChannelUpdate, { channelId });
+}
 export function broadcastGuildMemberAdd(guildId: string, member: unknown) {
   io?.to(`guild:${guildId}`).emit(SocketEvents.GuildMemberAdd, member);
+}
+export function broadcastMemberUpdate(guildId: string, member: unknown) {
+  io?.to(`guild:${guildId}`).emit(SocketEvents.GuildMemberUpdate, member);
+}
+export function broadcastRoleCreate(role: { guildId: string }) {
+  io?.to(`guild:${role.guildId}`).emit(SocketEvents.RoleCreate, role);
+}
+export function broadcastRoleUpdate(role: { guildId: string }) {
+  io?.to(`guild:${role.guildId}`).emit(SocketEvents.RoleUpdate, role);
+}
+export function broadcastRoleDelete(role: { guildId: string; id: string }) {
+  io?.to(`guild:${role.guildId}`).emit(SocketEvents.RoleDelete, { id: role.id, guildId: role.guildId });
+}
+export function broadcastReactionAdd(payload: ReactionEventPayload) {
+  io?.to(`channel:${payload.channelId}`).emit(SocketEvents.ReactionAdd, payload);
+}
+export function broadcastReactionRemove(payload: ReactionEventPayload) {
+  io?.to(`channel:${payload.channelId}`).emit(SocketEvents.ReactionRemove, payload);
+}
+export function notifyMentions(targetUserIds: string[], message: { channelId: string; id: string; author: { displayName: string }; content: string }) {
+  if (!io) return;
+  const payload: MentionNotificationPayload = {
+    channelId: message.channelId,
+    guildId: null,
+    messageId: message.id,
+    authorDisplayName: message.author.displayName,
+    preview: message.content.slice(0, 200),
+  };
+  for (const uid of targetUserIds) {
+    io.to(`user:${uid}`).emit(SocketEvents.Mention, payload);
+  }
 }

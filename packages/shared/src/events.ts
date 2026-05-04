@@ -12,14 +12,23 @@ export const SocketEvents = {
   MessageNew: 'message:new',
   MessageUpdate: 'message:update',
   MessageDelete: 'message:delete',
+  MessagePinUpdate: 'message:pin-update',
+  ReactionAdd: 'reaction:add',
+  ReactionRemove: 'reaction:remove',
   PresenceUpdate: 'presence:update',
   GuildUpdate: 'guild:update',
   GuildMemberAdd: 'guild:member:add',
   GuildMemberRemove: 'guild:member:remove',
+  GuildMemberUpdate: 'guild:member:update',
   ChannelCreate: 'channel:create',
   ChannelDelete: 'channel:delete',
+  ChannelUpdate: 'channel:update',
+  RoleCreate: 'role:create',
+  RoleUpdate: 'role:update',
+  RoleDelete: 'role:delete',
   TypingUpdate: 'typing:update',
   VoiceParticipants: 'voice:participants',
+  Mention: 'app:mention',
   Error: 'app:error',
 } as const;
 
@@ -87,7 +96,33 @@ export interface MessageDto {
   content: string;
   createdAt: string;
   editedAt: string | null;
+  pinned: boolean;
+  pinnedAt: string | null;
+  pinnedById: string | null;
+  mentionsEveryone: boolean;
   attachments: AttachmentDto[];
+  reactions: ReactionSummaryDto[];
+  mentions: MentionDto[];
+}
+
+export interface ReactionSummaryDto {
+  emoji: string;
+  count: number;
+  /** ids of users who reacted (capped server-side). */
+  userIds: string[];
+}
+
+export interface ReactionEventPayload {
+  messageId: string;
+  channelId: string;
+  emoji: string;
+  userId: string;
+}
+
+export interface MentionDto {
+  type: 'USER' | 'ROLE';
+  userId: string | null;
+  roleId: string | null;
 }
 
 export interface AttachmentDto {
@@ -106,6 +141,9 @@ export interface ChannelDto {
   position: number;
   topic: string | null;
   parentId: string | null;
+  dmKind?: 'DIRECT' | 'GROUP' | null;
+  dmOwnerId?: string | null;
+  recipients?: UserDto[];
 }
 
 export interface GuildDto {
@@ -114,6 +152,26 @@ export interface GuildDto {
   iconUrl: string | null;
   ownerId: string;
   channels?: ChannelDto[];
+}
+
+export interface RoleDto {
+  id: string;
+  guildId: string;
+  name: string;
+  color: number;
+  permissions: string;
+  position: number;
+  isEveryone: boolean;
+}
+
+export interface PermissionOverwriteDto {
+  id: string;
+  channelId: string;
+  type: 'ROLE' | 'MEMBER';
+  roleId: string | null;
+  userId: string | null;
+  allow: string;
+  deny: string;
 }
 
 export interface UserDto {
@@ -141,4 +199,18 @@ export interface PresencePayload {
 export interface TypingPayload {
   channelId: string;
   userId: string;
+}
+
+export interface MentionNotificationPayload {
+  channelId: string;
+  guildId: string | null;
+  messageId: string;
+  authorDisplayName: string;
+  preview: string;
+}
+
+export interface PinUpdatePayload {
+  channelId: string;
+  messageId: string;
+  pinned: boolean;
 }

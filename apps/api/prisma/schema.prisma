@@ -11,30 +11,36 @@ datasource db {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  username     String    @unique
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
   displayName  String
   passwordHash String
   avatarUrl    String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  members       Member[]
-  messages      Message[]
-  ownedGuilds   Guild[]   @relation("GuildOwner")
-  invites       Invite[]
-  refreshTokens RefreshToken[]
+  members              Member[]
+  messages             Message[]
+  pinnedMessages       Message[]             @relation("MessagePinnedBy")
+  ownedGuilds          Guild[]               @relation("GuildOwner")
+  invites              Invite[]
+  refreshTokens        RefreshToken[]
+  reactions            Reaction[]
+  mentions             MessageMention[]
+  pushSubscriptions    PushSubscription[]
+  permissionOverwrites PermissionOverwrite[] @relation("OverwriteMember")
+  dmRecipients         DMRecipient[]
 
   @@map("users")
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
-  tokenHash String   @unique
+  tokenHash String    @unique
   expiresAt DateTime
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
   revokedAt DateTime?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -67,9 +73,9 @@ model Member {
   nickname String?
   joinedAt DateTime @default(now())
 
-  user  User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  guild Guild   @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  roles Role[]  @relation("MemberRoles")
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guild Guild  @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  roles Role[] @relation("MemberRoles")
 
   @@unique([userId, guildId])
   @@index([guildId])
@@ -77,15 +83,18 @@ model Member {
 }
 
 model Role {
-  id          String @id @default(cuid())
+  id          String  @id @default(cuid())
   guildId     String
   name        String
-  color       Int    @default(0)
-  permissions String @default("0") // BigInt as decimal string for portability
-  position    Int    @default(0)
+  color       Int     @default(0)
+  permissions String  @default("0") // BigInt as decimal string for portability
+  position    Int     @default(0)
+  isEveryone  Boolean @default(false)
 
-  guild   Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  members Member[] @relation("MemberRoles")
+  guild                Guild                 @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  members              Member[]              @relation("MemberRoles")
+  permissionOverwrites PermissionOverwrite[] @relation("OverwriteRole")
+  mentions             MessageMention[]
 
   @@index([guildId])
   @@map("roles")
@@ -98,48 +107,65 @@ enum ChannelType {
   DM
 }
 
-model Channel {
-  id       String      @id @default(cuid())
-  guildId  String?
-  name     String
-  type     ChannelType
-  position Int         @default(0)
-  topic    String?
-  parentId String?
-  createdAt DateTime   @default(now())
+enum DMKind {
+  DIRECT
+  GROUP
+}
 
-  guild    Guild?    @relation(fields: [guildId], references: [id], onDelete: Cascade)
-  messages Message[]
+model Channel {
+  id        String      @id @default(cuid())
+  guildId   String?
+  name      String
+  type      ChannelType
+  position  Int         @default(0)
+  topic     String?
+  parentId  String?
+  dmKind    DMKind?
+  dmOwnerId String?
+  createdAt DateTime    @default(now())
+
+  guild                Guild?                @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  messages             Message[]
+  permissionOverwrites PermissionOverwrite[]
+  dmRecipients         DMRecipient[]
 
   @@index([guildId])
   @@map("channels")
 }
 
 model Message {
-  id        String    @id @default(cuid())
-  channelId String
-  authorId  String
-  content   String
-  editedAt  DateTime?
-  createdAt DateTime  @default(now())
+  id               String    @id @default(cuid())
+  channelId        String
+  authorId         String
+  content          String
+  editedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  pinned           Boolean   @default(false)
+  pinnedAt         DateTime?
+  pinnedById       String?
+  mentionsEveryone Boolean   @default(false)
 
-  channel     Channel      @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  author      User         @relation(fields: [authorId], references: [id])
+  channel     Channel          @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author      User             @relation(fields: [authorId], references: [id])
+  pinnedBy    User?            @relation("MessagePinnedBy", fields: [pinnedById], references: [id])
   attachments Attachment[]
+  reactions   Reaction[]
+  mentions    MessageMention[]
 
   @@index([channelId, createdAt])
+  @@index([channelId, pinned])
   @@map("messages")
 }
 
 model Attachment {
-  id        String  @id @default(cuid())
-  messageId String?
+  id         String   @id @default(cuid())
+  messageId  String?
   uploaderId String
-  url       String
-  filename  String
-  size      Int
-  mimeType  String
-  createdAt DateTime @default(now())
+  url        String
+  filename   String
+  size       Int
+  mimeType   String
+  createdAt  DateTime @default(now())
 
   message Message? @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
@@ -161,4 +187,93 @@ model Invite {
 
   @@index([guildId])
   @@map("invites")
+}
+
+enum OverwriteType {
+  ROLE
+  MEMBER
+}
+
+model PermissionOverwrite {
+  id        String        @id @default(cuid())
+  channelId String
+  type      OverwriteType
+  roleId    String?
+  userId    String?
+  allow     String        @default("0")
+  deny      String        @default("0")
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  role    Role?   @relation("OverwriteRole", fields: [roleId], references: [id], onDelete: Cascade)
+  user    User?   @relation("OverwriteMember", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, roleId])
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@map("permission_overwrites")
+}
+
+model Reaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@map("reactions")
+}
+
+enum MentionType {
+  USER
+  ROLE
+}
+
+model MessageMention {
+  id        String      @id @default(cuid())
+  messageId String
+  type      MentionType
+  userId    String?
+  roleId    String?
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role    Role?   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@index([userId])
+  @@map("message_mentions")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model DMRecipient {
+  id        String   @id @default(cuid())
+  channelId String
+  userId    String
+  joinedAt  DateTime @default(now())
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([channelId, userId])
+  @@index([userId])
+  @@index([channelId])
+  @@map("dm_recipients")
 }

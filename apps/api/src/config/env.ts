@@ -31,6 +31,11 @@ const EnvSchema = z.object({
   MINIO_PUBLIC_URL: z.string().optional(),
 
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(25 * 1024 * 1024),
+
+  // Web Push (VAPID). All three must be set to enable push notifications.
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().optional(), // e.g. mailto:admin@example.com
 });
 
 export type Env = z.infer<typeof EnvSchema>;
