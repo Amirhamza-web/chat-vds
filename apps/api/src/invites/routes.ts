@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { CreateInviteSchema } from '@chat-vds/shared';
 import * as service from './service.js';
 import { Unauthorized } from '../lib/errors.js';
-import { broadcastGuildMemberAdd } from '../realtime/gateway.js';
+import { broadcastGuildMemberAdd, joinUserToGuildRoom } from '../realtime/gateway.js';
 import { prisma } from '../db/prisma.js';
 
 export async function inviteRoutes(app: FastifyInstance): Promise<void> {
@@ -30,6 +30,7 @@ export async function inviteRoutes(app: FastifyInstance): Promise<void> {
         },
       });
       if (member) broadcastGuildMemberAdd(guild.id, member);
+      await joinUserToGuildRoom(req.userId, guild.id);
       return guild;
     },
   );

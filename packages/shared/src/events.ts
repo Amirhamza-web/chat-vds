@@ -141,4 +141,6 @@ export interface PresencePayload {
 export interface TypingPayload {
   channelId: string;
   userId: string;
+  username: string;
+  displayName: string;
 }

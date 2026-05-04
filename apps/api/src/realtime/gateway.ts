@@ -37,7 +37,7 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
     }
   });
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token =
       (socket.handshake.auth?.token as string | undefined) ??
       (socket.handshake.headers.authorization?.startsWith('Bearer ')
@@ -46,8 +46,14 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
     if (!token) return next(new Error('Unauthorized'));
     const payload = verifyAccessToken(token);
     if (!payload) return next(new Error('Unauthorized'));
+    const user = await prisma.user.findUnique({
+      where: { id: payload.sub },
+      select: { displayName: true },
+    });
+    if (!user) return next(new Error('Unauthorized'));
     socket.data.userId = payload.sub;
     socket.data.username = payload.username;
+    socket.data.displayName = user.displayName;
     next();
   });
 
@@ -88,6 +94,8 @@ export function attachSocketIO(httpServer: HttpServer): SocketIOServer {
       socket.to(`channel:${channelId}`).emit(SocketEvents.TypingUpdate, {
         channelId,
         userId,
+        username: socket.data.username as string,
+        displayName: (socket.data.displayName as string) ?? (socket.data.username as string),
       });
     });
 
@@ -138,6 +146,16 @@ export function broadcastChannelDelete(channel: { id: string; guildId: string | 
     id: channel.id,
     guildId: channel.guildId,
   });
+}
+
+/**
+ * Make all currently-connected sockets for a user join the guild's room. Used
+ * after invite acceptance so the new member receives `channel:create`,
+ * presence, and message events without needing to reconnect.
+ */
+export async function joinUserToGuildRoom(userId: string, guildId: string): Promise<void> {
+  if (!io) return;
+  await io.in(`user:${userId}`).socketsJoin(`guild:${guildId}`);
 }
 export function broadcastGuildMemberAdd(guildId: string, member: unknown) {
   io?.to(`guild:${guildId}`).emit(SocketEvents.GuildMemberAdd, member);

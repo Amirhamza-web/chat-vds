@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { SocketEvents } from '@chat-vds/shared';
 import { fetchGuilds } from '../features/guilds/api';
 import GuildSidebar from '../components/GuildSidebar';
 import ChannelSidebar from '../components/ChannelSidebar';
@@ -15,19 +16,35 @@ import type { GuildWithChannels } from '../features/guilds/types';
 export default function AppShell() {
   const accessToken = useAuthStore((s) => s.accessToken);
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { data: guilds = [], isLoading } = useQuery({
     queryKey: ['guilds'],
     queryFn: fetchGuilds,
     enabled: !!accessToken,
   });
 
+  // Live-refresh the guild/channel list on socket events. Without this,
+  // members do not see new channels (or removed channels) until they reload.
   useEffect(() => {
     if (!accessToken) return;
-    getSocket();
+    const socket = getSocket();
+    const refresh = () => {
+      void qc.invalidateQueries({ queryKey: ['guilds'] });
+    };
+    socket.on(SocketEvents.ChannelCreate, refresh);
+    socket.on(SocketEvents.ChannelDelete, refresh);
+    socket.on(SocketEvents.GuildUpdate, refresh);
+    socket.on(SocketEvents.GuildMemberAdd, refresh);
+    socket.on(SocketEvents.GuildMemberRemove, refresh);
     return () => {
+      socket.off(SocketEvents.ChannelCreate, refresh);
+      socket.off(SocketEvents.ChannelDelete, refresh);
+      socket.off(SocketEvents.GuildUpdate, refresh);
+      socket.off(SocketEvents.GuildMemberAdd, refresh);
+      socket.off(SocketEvents.GuildMemberRemove, refresh);
       disconnectSocket();
     };
-  }, [accessToken]);
+  }, [accessToken, qc]);
 
   const firstGuild = useMemo(() => guilds[0], [guilds]);
 

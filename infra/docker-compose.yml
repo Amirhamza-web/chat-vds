@@ -1,6 +1,10 @@
 name: chat-vds
 
 services:
+  # ─────────── shared infrastructure ───────────
+  # Ports are bound to 127.0.0.1 so they're available for `pnpm dev` on the
+  # host but not exposed publicly on a VDS. Set `DB_BIND_HOST=0.0.0.0` (etc.)
+  # in `.env` only if you need remote access.
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -10,6 +14,8 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatvds}
     volumes:
       - pg_data:/var/lib/postgresql/data
+    ports:
+      - '${DB_BIND_HOST:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-chatvds}']
       interval: 5s
@@ -22,6 +28,8 @@ services:
     command: ['redis-server', '--save', '60', '1', '--loglevel', 'warning']
     volumes:
       - redis_data:/data
+    ports:
+      - '${DB_BIND_HOST:-127.0.0.1}:${REDIS_PORT:-6379}:6379'
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -37,6 +45,9 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
     volumes:
       - minio_data:/data
+    ports:
+      - '${DB_BIND_HOST:-127.0.0.1}:${MINIO_HOST_PORT:-9000}:9000'
+      - '${DB_BIND_HOST:-127.0.0.1}:${MINIO_CONSOLE_PORT:-9001}:9001'
     healthcheck:
       test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
       interval: 10s
